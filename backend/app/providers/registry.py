@@ -1,7 +1,7 @@
 """
 Provider registry.
 
-Selects topology providers and dependency adapters from application settings.
+Selects topology providers, dependency adapters, and explanation providers from application settings.
 """
 from __future__ import annotations
 
@@ -9,9 +9,16 @@ from app.config import settings
 from app.providers.base import TopologyProvider
 from app.providers.dependencies import (
     DependencyAnalysisAdapter,
+    EngineDependencyAdapter,
     GraphEngineUnavailableError,
     SimulatedDependencyAdapter,
     UnavailableDependencyAdapter,
+)
+from app.providers.explanations import (
+    ExplanationProvider,
+    ExplanationProviderUnavailableError,
+    SarvamExplanationProvider,
+    UnavailableExplanationProvider,
 )
 from app.providers.simulated import SimulatedTopologyProvider
 
@@ -46,8 +53,8 @@ def get_dependency_adapter() -> DependencyAnalysisAdapter:
 
     Supported DEPENDENCY_ADAPTER values:
       unavailable - Explicitly unavailable adapter (returns 503)
-      simulated   - Standalone demo mapping
-      engine      - HopTrace graph engine (when implemented)
+      simulated   - Standalone demo mapping (hardcoded topology-based)
+      engine      - HopTrace graph engine (Neo4j with in-memory fallback)
     """
     name = settings.dependency_adapter.lower()
 
@@ -58,12 +65,35 @@ def get_dependency_adapter() -> DependencyAnalysisAdapter:
         return SimulatedDependencyAdapter()
 
     if name == "engine":
-        return UnavailableDependencyAdapter(
-            "The engine dependency adapter is unavailable: dependency analysis "
-            "integration has not been implemented yet."
-        )
+        return EngineDependencyAdapter()
 
     raise ValueError(
         f"Unknown DEPENDENCY_ADAPTER={name!r}. "
         "Valid values: 'unavailable', 'simulated', 'engine'."
+    )
+
+
+def get_explanation_provider() -> ExplanationProvider:
+    """
+    Factory used as a FastAPI dependency for incident explanations.
+
+    Supported EXPLANATION_PROVIDER values:
+      unavailable - Explicitly unavailable provider (raises ExplanationProviderUnavailableError)
+      sarvam      - Sarvam AI chat-completions endpoint (requires SARVAM_API_KEY)
+    """
+    name = settings.explanation_provider.lower()
+
+    if name == "unavailable":
+        return UnavailableExplanationProvider()
+
+    if name == "sarvam":
+        return SarvamExplanationProvider(
+            api_key=settings.sarvam_api_key,
+            model=settings.sarvam_model,
+            timeout_seconds=settings.sarvam_timeout_seconds,
+        )
+
+    raise ValueError(
+        f"Unknown EXPLANATION_PROVIDER={name!r}. "
+        "Valid values: 'unavailable', 'sarvam'."
     )

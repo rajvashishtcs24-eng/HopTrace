@@ -100,7 +100,7 @@ def test_get_subscribers_with_records(client: TestClient, isolated_db: str) -> N
     sub_map = {s["id"]: s for s in data["subscribers"]}
     assert "SUB101" in sub_map
     sub101 = sub_map["SUB101"]
-    assert sub101["display_name"] == "Demo Subscriber 101"
+    assert sub101["display_name"] == "Ramesh Patel (Kishan Kirana)"
     assert sub101["plan"] == "Basic"
     assert sub101["access_point_id"] == "AP1"
     assert sub101["status"] == "active"

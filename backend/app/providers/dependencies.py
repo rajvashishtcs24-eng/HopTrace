@@ -8,7 +8,8 @@ are downstream of a degraded link or failed router).
 This adapter interface cleanly decouples FastAPI from Member 1's engine:
 - If Member 1's engine is not connected, UnavailableDependencyAdapter honestly raises
   GraphEngineUnavailableError (which translates to HTTP 503).
-- If Member 1's engine is ready, Neo4jDependencyAdapter is plugged in.
+- If Member 1's engine is ready, EngineDependencyAdapter delegates graph traversal
+  to the shared HopTraceEngine singleton and enriches results from SQLite.
 - For isolated tests or explicit testbed demos, test doubles or SimulatedDependencyAdapter
   can be selected without modifying the API layer.
 """
@@ -125,3 +126,83 @@ class SimulatedDependencyAdapter(DependencyAnalysisAdapter):
             affected_aps,
         )
         return [dict(row) for row in cursor.fetchall()]
+
+
+class EngineDependencyAdapter(DependencyAnalysisAdapter):
+    """
+    Dependency adapter backed by the shared HopTraceEngine singleton.
+
+    Delegates graph traversal to the engine's active store (Neo4j when available,
+    InMemory otherwise). Enriches the resulting subscriber IDs by looking them up
+    in the operational SQLite database so the API always returns current subscriber
+    records — not stale graph-embedded data.
+
+    Import convention: uses ``from app.engine.facade import get_engine`` to access
+    the module-level singleton, identical to EngineTopologyProvider, ensuring no
+    second engine instance is ever created.
+    """
+
+    def get_affected_subscribers(
+        self,
+        incident_id: str,
+        suspected_component_id: str | None,
+        suspected_component_type: str | None,
+        db_conn: sqlite3.Connection,
+    ) -> list[dict[str, Any]]:
+        """
+        Determine affected subscribers by delegating graph traversal to the engine.
+
+        Steps:
+          1. Guard: return [] if suspected_component_id is absent.
+          2. Obtain the engine's active graph store (Neo4j or in-memory fallback).
+          3. Call store.get_affected_subscribers() with the component details.
+          4. Extract subscriber IDs from the engine response.
+          5. Guard: return [] if no IDs were found (skip SQL round-trip).
+          6. Query SQLite for the operational subscriber records matching those IDs.
+          7. Return dicts with keys: id, display_name, access_point_id, ordered by id.
+
+        Raises:
+            GraphEngineUnavailableError: If the graph engine or SQLite query fails.
+                Raw exception details (connection strings, credentials) are not
+                forwarded to the caller.
+        """
+        if not suspected_component_id:
+            return []
+
+        component_type = suspected_component_type or "link"
+
+        try:
+            from app.engine.facade import get_engine  # deferred: mirrors EngineTopologyProvider
+
+            engine = get_engine()
+            store = engine.get_active_store()
+            result = store.get_affected_subscribers(
+                suspected_component_id=suspected_component_id,
+                component_type=component_type,
+            )
+        except Exception as exc:
+            raise GraphEngineUnavailableError(
+                "Graph dependency engine is unavailable: could not retrieve affected "
+                "subscribers from the HopTrace graph engine."
+            ) from exc
+
+        subscriber_ids = [sub.id for sub in result.subscribers]
+        if not subscriber_ids:
+            return []
+
+        try:
+            placeholders = ",".join("?" for _ in subscriber_ids)
+            cursor = db_conn.execute(
+                f"""
+                SELECT id, display_name, access_point_id
+                FROM subscribers
+                WHERE id IN ({placeholders})
+                ORDER BY id ASC;
+                """,
+                subscriber_ids,
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as exc:
+            raise GraphEngineUnavailableError(
+                "Failed to retrieve subscriber records from the operational database."
+            ) from exc

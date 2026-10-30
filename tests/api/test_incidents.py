@@ -24,11 +24,13 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.db.connection import get_db_connection
 from app.db.repository import create_incident
 from app.main import app
 from app.providers.dependencies import (
     DependencyAnalysisAdapter,
+    EngineDependencyAdapter,
     GraphEngineUnavailableError,
     SimulatedDependencyAdapter,
 )
@@ -163,12 +165,13 @@ def test_affected_subscribers_unknown_incident_404(client: TestClient, isolated_
 # ── 8. Affected Subscribers 503 when Graph Engine Unavailable ───────────────
 
 def test_affected_subscribers_503_when_engine_unavailable(
-    client: TestClient, isolated_db: str
+    client: TestClient, isolated_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    When Member 1's graph engine is not connected (default),
+    When Member 1's graph engine is not connected (or unavailable adapter is configured),
     the endpoint must return 503 rather than fabricating affected subscribers.
     """
+    monkeypatch.setattr(settings, "dependency_adapter", "unavailable")
     response = client.get("/api/v1/incidents/incident-001/affected-subscribers")
     assert response.status_code == 503
     assert "unavailable" in response.json()["detail"].lower()
@@ -243,5 +246,35 @@ def test_simulated_dependency_adapter_end_to_end(client: TestClient, isolated_db
         assert "SUB101" in sub_ids
         assert "SUB102" in sub_ids
         assert all(s["access_point_id"] == "AP1" for s in data["subscribers"])
+    finally:
+        app.dependency_overrides.pop(get_dependency_adapter, None)
+
+
+# ── 12. EngineDependencyAdapter End-to-End ───────────────────────────────────
+
+def test_engine_dependency_adapter_end_to_end(client: TestClient, isolated_db: str) -> None:
+    """
+    Using EngineDependencyAdapter:
+    incident-001 has suspected_component_id='L2'.
+    Engine graph store traces downstream AP: AP1.
+    Subscribers on AP1 are SUB101 and SUB102.
+    SQLite enriches those records with operational data.
+    """
+    app.dependency_overrides[get_dependency_adapter] = lambda: EngineDependencyAdapter()
+    try:
+        response = client.get("/api/v1/incidents/incident-001/affected-subscribers")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["count"] == 2
+        sub_ids = [s["id"] for s in data["subscribers"]]
+        assert "SUB101" in sub_ids
+        assert "SUB102" in sub_ids
+        assert all(s["access_point_id"] == "AP1" for s in data["subscribers"])
+        # Check SQLite enrichment fields
+        for s in data["subscribers"]:
+            assert "id" in s
+            assert "display_name" in s
+            assert "access_point_id" in s
     finally:
         app.dependency_overrides.pop(get_dependency_adapter, None)

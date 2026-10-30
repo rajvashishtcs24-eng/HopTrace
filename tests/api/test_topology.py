@@ -25,6 +25,7 @@ from app.config import settings
 from app.main import app
 from app.providers.base import TopologyProvider, TopologyUnavailableError
 from app.providers.dependencies import (
+    EngineDependencyAdapter,
     SimulatedDependencyAdapter,
     UnavailableDependencyAdapter,
 )
@@ -139,14 +140,16 @@ def test_topology_measurement_fields_are_float_or_null(topology_response: dict) 
             )
 
 
-def test_topology_at_least_one_null_measurement(topology_response: dict) -> None:
+def test_topology_at_least_one_null_measurement(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     The simulated provider intentionally leaves throughput_mbps null on one
     link to demonstrate the nullable-field contract works end-to-end.
     """
+    monkeypatch.setattr(settings, "topology_provider", "simulated")
+    response = client.get("/api/v1/topology").json()
     null_found = any(
         link.get("throughput_mbps") is None
-        for link in topology_response["links"]
+        for link in response["links"]
     )
     assert null_found, (
         "Expected at least one link with throughput_mbps=null in simulated data"
@@ -295,7 +298,7 @@ def test_registry_dependency_adapter_selection(monkeypatch) -> None:
     assert isinstance(get_dependency_adapter(), SimulatedDependencyAdapter)
 
     monkeypatch.setattr(settings, "dependency_adapter", "engine")
-    assert isinstance(get_dependency_adapter(), UnavailableDependencyAdapter)
+    assert isinstance(get_dependency_adapter(), EngineDependencyAdapter)
 
     monkeypatch.setattr(settings, "dependency_adapter", "unknown_val")
     with pytest.raises(ValueError) as exc_info:
