@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
+from app.api.lab import router as lab_router
 from app.api.subscribers import router as subscribers_router
 from app.api.topology import router as topology_router
 from app.config import settings
@@ -26,12 +27,23 @@ from app.db.init import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan context: initialize SQLite database on startup."""
+    """Application lifespan context: initialize SQLite database and graph engine on startup."""
     init_db(
         db_path=settings.sqlite_db_path,
         seed_demo=settings.seed_demo_subscribers,
         seed_incidents=settings.seed_demo_incidents,
     )
+
+    if settings.topology_provider.lower() == "engine":
+        try:
+            from app.engine.facade import seed_topology
+
+            seed_topology()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to initialize graph engine topology during startup: {exc}"
+            ) from exc
+
     yield
 
 
@@ -63,3 +75,4 @@ app.include_router(health_router, prefix=API_PREFIX, tags=["health"])
 app.include_router(topology_router, prefix=API_PREFIX, tags=["topology"])
 app.include_router(subscribers_router, prefix=API_PREFIX, tags=["subscribers"])
 app.include_router(incidents_router, prefix=API_PREFIX, tags=["incidents"])
+app.include_router(lab_router, prefix=API_PREFIX, tags=["lab"])

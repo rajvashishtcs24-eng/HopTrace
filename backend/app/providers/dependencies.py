@@ -60,6 +60,13 @@ class UnavailableDependencyAdapter(DependencyAnalysisAdapter):
     Honest behavior: refuses to fabricate dependency analysis and raises GraphEngineUnavailableError.
     """
 
+    def __init__(self, message: str | None = None) -> None:
+        self.message = message or (
+            "Graph dependency engine is unavailable: Member 1's Neo4j engine in "
+            "backend/app/engine/ is not integrated. Affected subscribers cannot be "
+            "determined without verified dependency analysis."
+        )
+
     def get_affected_subscribers(
         self,
         incident_id: str,
@@ -67,11 +74,7 @@ class UnavailableDependencyAdapter(DependencyAnalysisAdapter):
         suspected_component_type: str | None,
         db_conn: sqlite3.Connection,
     ) -> list[dict[str, Any]]:
-        raise GraphEngineUnavailableError(
-            "Graph dependency engine is unavailable: Member 1's Neo4j engine in "
-            "backend/app/engine/ is not integrated. Affected subscribers cannot be "
-            "determined without verified dependency analysis."
-        )
+        raise GraphEngineUnavailableError(self.message)
 
 
 class SimulatedDependencyAdapter(DependencyAnalysisAdapter):

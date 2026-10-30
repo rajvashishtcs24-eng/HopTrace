@@ -16,14 +16,21 @@ Verifies:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 from app.providers.base import TopologyProvider, TopologyUnavailableError
-from app.providers.registry import get_topology_provider
+from app.providers.dependencies import (
+    SimulatedDependencyAdapter,
+    UnavailableDependencyAdapter,
+)
+from app.providers.engine_topology import EngineTopologyProvider
+from app.providers.registry import get_dependency_adapter, get_topology_provider
+from app.providers.simulated import SimulatedTopologyProvider
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -174,3 +181,149 @@ def test_topology_503_when_provider_unavailable() -> None:
     finally:
         # Always restore so other tests are not affected.
         app.dependency_overrides.pop(get_topology_provider, None)
+
+
+# ── provider unit tests ───────────────────────────────────────────────────────
+
+def test_simulated_topology_provider_direct() -> None:
+    provider = SimulatedTopologyProvider()
+    resp = provider.get_topology()
+    assert isinstance(resp.nodes, list)
+    assert len(resp.nodes) == 6
+    assert isinstance(resp.links, list)
+    assert len(resp.links) == 5
+    assert resp.data_source == "simulated"
+
+
+def test_engine_topology_provider_direct() -> None:
+    provider = EngineTopologyProvider()
+    resp = provider.get_topology()
+    assert isinstance(resp.nodes, list)
+    assert len(resp.nodes) >= 6
+    assert isinstance(resp.links, list)
+    assert len(resp.links) >= 5
+    assert resp.data_source in ("simulated", "measured")
+    assert all(n.status in ("healthy", "degraded", "failed", "unknown") for n in resp.nodes)
+    assert all(l.status in ("healthy", "degraded", "failed", "unknown") for l in resp.links)
+
+
+def test_engine_topology_provider_does_not_seed_on_retrieval() -> None:
+    with patch("app.providers.engine_topology.get_topology") as mock_get_topo, \
+         patch("app.engine.facade.seed_topology") as mock_seed:
+        mock_topo = MagicMock()
+        mock_topo.nodes = []
+        mock_topo.links = []
+        mock_topo.data_source = "simulated"
+        mock_get_topo.return_value = mock_topo
+
+        provider = EngineTopologyProvider()
+        provider.get_topology()
+
+        mock_get_topo.assert_called_once()
+        mock_seed.assert_not_called()
+
+
+def test_engine_topology_provider_maps_down_to_failed() -> None:
+    mock_topo = MagicMock()
+    mock_node = MagicMock(id="N1", type="router", label="Router 1", status="down")
+    mock_link = MagicMock(
+        id="L1",
+        source="N1",
+        target="N2",
+        status="down",
+        latency_ms=10.0,
+        packet_loss_pct=5.0,
+        throughput_mbps=None,
+    )
+    mock_topo.nodes = [mock_node]
+    mock_topo.links = [mock_link]
+    mock_topo.data_source = "simulated"
+
+    with patch("app.providers.engine_topology.get_topology", return_value=mock_topo):
+        provider = EngineTopologyProvider()
+        resp = provider.get_topology()
+        assert resp.nodes[0].status == "failed"
+        assert resp.links[0].status == "failed"
+
+
+def test_engine_topology_provider_error_handling() -> None:
+    with patch(
+        "app.providers.engine_topology.get_topology",
+        side_effect=RuntimeError("Engine failure"),
+    ):
+        provider = EngineTopologyProvider()
+        with pytest.raises(TopologyUnavailableError) as exc_info:
+            provider.get_topology()
+        assert "Failed to retrieve topology" in str(exc_info.value)
+
+
+def test_engine_topology_provider_empty_topology_raises() -> None:
+    with patch("app.providers.engine_topology.get_topology", return_value=None):
+        provider = EngineTopologyProvider()
+        with pytest.raises(TopologyUnavailableError) as exc_info:
+            provider.get_topology()
+        assert "empty topology" in str(exc_info.value).lower()
+
+
+# ── registry selection tests ─────────────────────────────────────────────────
+
+def test_registry_selects_simulated_provider(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "topology_provider", "simulated")
+    provider = get_topology_provider()
+    assert isinstance(provider, SimulatedTopologyProvider)
+
+
+def test_registry_selects_engine_provider(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "topology_provider", "engine")
+    provider = get_topology_provider()
+    assert isinstance(provider, EngineTopologyProvider)
+
+
+def test_registry_invalid_topology_provider_fails(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "topology_provider", "invalid_provider")
+    with pytest.raises(ValueError) as exc_info:
+        get_topology_provider()
+    assert "Unknown TOPOLOGY_PROVIDER='invalid_provider'" in str(exc_info.value)
+    assert "'simulated', 'engine'" in str(exc_info.value)
+
+
+def test_registry_dependency_adapter_selection(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "dependency_adapter", "unavailable")
+    assert isinstance(get_dependency_adapter(), UnavailableDependencyAdapter)
+
+    monkeypatch.setattr(settings, "dependency_adapter", "simulated")
+    assert isinstance(get_dependency_adapter(), SimulatedDependencyAdapter)
+
+    monkeypatch.setattr(settings, "dependency_adapter", "engine")
+    assert isinstance(get_dependency_adapter(), UnavailableDependencyAdapter)
+
+    monkeypatch.setattr(settings, "dependency_adapter", "unknown_val")
+    with pytest.raises(ValueError) as exc_info:
+        get_dependency_adapter()
+    assert "Unknown DEPENDENCY_ADAPTER='unknown_val'" in str(exc_info.value)
+
+
+# ── API integration with engine provider ─────────────────────────────────────
+
+def test_topology_api_with_engine_provider(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "topology_provider", "engine")
+    response = client.get("/api/v1/topology")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["nodes"]) >= 6
+    assert len(data["links"]) >= 5
+    assert data["data_source"] in ("simulated", "measured")
+    assert all(n["status"] in ("healthy", "degraded", "failed", "unknown") for n in data["nodes"])
+    assert all(l["status"] in ("healthy", "degraded", "failed", "unknown") for l in data["links"])
+
+
+def test_topology_api_with_engine_provider_error(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "topology_provider", "engine")
+    with patch(
+        "app.providers.engine_topology.get_topology",
+        side_effect=RuntimeError("Graph engine crashed"),
+    ):
+        response = client.get("/api/v1/topology")
+        assert response.status_code == 503
+        assert "unavailable" in response.json()["detail"].lower()
+

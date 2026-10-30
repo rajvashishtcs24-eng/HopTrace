@@ -30,16 +30,16 @@ class Settings(BaseSettings):
 
     # --- Topology provider ---
     # "simulated"  – use the built-in SimulatedTopologyProvider (no Neo4j needed)
-    # "neo4j"      – use the Neo4jTopologyProvider (Member 1's implementation)
+    # "engine"     – use the EngineTopologyProvider (HopTrace graph engine)
     topology_provider: str = "simulated"
 
     # --- Dependency analysis adapter ---
-    # "unavailable" – default honest behavior when Member 1's engine is not connected (returns 503)
+    # "unavailable" – default honest behavior when engine is not connected (returns 503)
     # "simulated"   – simulated dependency mapping for demos/testbed
-    # "neo4j"       – Member 1's Neo4j dependency engine
+    # "engine"      – engine dependency adapter (when implemented)
     dependency_adapter: str = "unavailable"
 
-    # Neo4j connection (only used when topology_provider == "neo4j")
+    # Neo4j connection (used by the graph engine when configured)
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
