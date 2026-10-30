@@ -172,14 +172,19 @@ class EngineDependencyAdapter(DependencyAnalysisAdapter):
         component_type = suspected_component_type or "link"
 
         try:
-            from app.engine.facade import get_engine  # deferred: mirrors EngineTopologyProvider
+            from app.db.repository import get_subscribers_by_ids
+            from app.engine.facade import get_affected_subscribers, get_engine
 
             engine = get_engine()
-            store = engine.get_active_store()
-            result = store.get_affected_subscribers(
-                suspected_component_id=suspected_component_id,
-                component_type=component_type,
-            )
+            # Attempt facade function using incident_id
+            result = get_affected_subscribers(incident_id, force_in_memory=True)
+            # If incident is not in engine's in-memory store (e.g. SQLite-only incident), query active store directly
+            if result.count == 0 and suspected_component_id:
+                store = engine.get_active_store(force_in_memory=True)
+                result = store.get_affected_subscribers(
+                    suspected_component_id=suspected_component_id,
+                    component_type=component_type,
+                )
         except Exception as exc:
             raise GraphEngineUnavailableError(
                 "Graph dependency engine is unavailable: could not retrieve affected "
@@ -191,17 +196,7 @@ class EngineDependencyAdapter(DependencyAnalysisAdapter):
             return []
 
         try:
-            placeholders = ",".join("?" for _ in subscriber_ids)
-            cursor = db_conn.execute(
-                f"""
-                SELECT id, display_name, access_point_id
-                FROM subscribers
-                WHERE id IN ({placeholders})
-                ORDER BY id ASC;
-                """,
-                subscriber_ids,
-            )
-            return [dict(row) for row in cursor.fetchall()]
+            return get_subscribers_by_ids(db_conn, subscriber_ids)
         except Exception as exc:
             raise GraphEngineUnavailableError(
                 "Failed to retrieve subscriber records from the operational database."
