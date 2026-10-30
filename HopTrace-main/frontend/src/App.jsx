@@ -173,7 +173,30 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
-  // Run Scenario & Clear Stale Incident on Baseline
+  // Fetch full incident details by ID from the backend
+  const fetchIncidentById = async (incidentId) => {
+    if (!incidentId) {
+      setActiveIncident(null);
+      setIncidentSubscribers([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/incidents/${incidentId}`);
+      if (res.ok) {
+        const fullIncident = await res.json();
+        setActiveIncident(fullIncident);
+        await fetchAffectedSubscribers(incidentId);
+      } else {
+        setActiveIncident(null);
+        setIncidentSubscribers([]);
+      }
+    } catch {
+      setActiveIncident(null);
+      setIncidentSubscribers([]);
+    }
+  };
+
+  // Run Scenario & fetch full incident details via GET /api/v1/incidents/{incident_id}
   const handleRunScenario = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -202,24 +225,23 @@ export default function App() {
       const newRunId = runResult.run_id || runResult.id;
       const associatedIncidentId = runResult.incident_id;
 
+      // Update Run ID and fetch measurements
       if (newRunId) {
         setActiveRunId(newRunId);
         await fetchRunMeasurements(newRunId);
       }
 
+      // If baseline or no incident produced, purge stale diagnosis
       if (scenario === 'baseline' || !associatedIncidentId) {
         setActiveIncident(null);
         setIncidentSubscribers([]);
         setHindiExplanation('');
       } else {
-        if (runResult.incident) {
-          setActiveIncident(runResult.incident);
-        } else {
-          setActiveIncident({ id: associatedIncidentId, summary: runResult.summary || 'Lab incident detected' });
-        }
-        await fetchAffectedSubscribers(associatedIncidentId);
+        // Fetch full incident details from the endpoint your friend requested
+        await fetchIncidentById(associatedIncidentId);
       }
 
+      // Refresh topology metrics
       const topoRes = await fetch(`${API_BASE}/topology`);
       if (topoRes.ok) {
         const topoData = await topoRes.json();
@@ -578,15 +600,43 @@ export default function App() {
                 <code>{activeIncident.id || 'N/A'}</code>
               </div>
               <div className="incident-row">
+                <span className="incident-label">Run ID:</span>
+                <code>{activeIncident.run_id || activeRunId || 'N/A'}</code>
+              </div>
+              <div className="incident-row">
                 <span className="incident-label">Suspected Component:</span>
                 <span className="badge badge-danger">
                   {activeIncident.suspected_component_id || 'Evaluating...'} ({activeIncident.suspected_component_type || 'unknown'})
                 </span>
               </div>
+              {activeIncident.confidence_score != null && (
+                <div className="incident-row">
+                  <span className="incident-label">Confidence:</span>
+                  <span className="badge badge-online">
+                    {(activeIncident.confidence_score * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
               <div className="incident-row">
                 <span className="incident-label">Summary:</span>
                 <p className="incident-summary">{activeIncident.summary || 'Incident detected by network telemetry.'}</p>
               </div>
+              {activeIncident.evidence && (
+                <div className="incident-row">
+                  <span className="incident-label">Evidence:</span>
+                  <p className="incident-summary" style={{ fontStyle: 'italic', color: '#cbd5e1' }}>
+                    {typeof activeIncident.evidence === 'string' ? activeIncident.evidence : JSON.stringify(activeIncident.evidence)}
+                  </p>
+                </div>
+              )}
+              {activeIncident.uncertainty_note && (
+                <div className="incident-row">
+                  <span className="incident-label">Note:</span>
+                  <p className="incident-summary" style={{ color: '#f59e0b', fontSize: '12px' }}>
+                    ⚠️ {activeIncident.uncertainty_note}
+                  </p>
+                </div>
+              )}
 
               <hr />
 
