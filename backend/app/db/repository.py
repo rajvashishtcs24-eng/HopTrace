@@ -58,6 +58,26 @@ def get_subscribers_by_access_points(
     return [dict(row) for row in cursor.fetchall()]
 
 
+def get_subscribers_by_ids(
+    conn: sqlite3.Connection,
+    subscriber_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Fetch operational subscriber details for specific subscriber IDs."""
+    if not subscriber_ids:
+        return []
+    placeholders = ",".join("?" for _ in subscriber_ids)
+    cursor = conn.execute(
+        f"""
+        SELECT id, display_name, access_point_id
+        FROM subscribers
+        WHERE id IN ({placeholders})
+        ORDER BY id ASC;
+        """,
+        subscriber_ids,
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
 # ── Payment Reminder Queries ─────────────────────────────────────────────────
 
 def record_payment_reminder(

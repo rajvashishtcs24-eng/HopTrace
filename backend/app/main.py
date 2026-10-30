@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         try:
             from app.engine.facade import seed_topology
 
-            seed_topology()
+            seed_topology(force_in_memory=True)
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to initialize graph engine topology during startup: {exc}"

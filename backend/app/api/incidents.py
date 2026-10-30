@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db.connection import get_db
 from app.db.repository import get_incident, get_latest_incident
+from app.engine.facade import get_incident_details, get_latest_incident as get_engine_latest_incident
 from app.providers.dependencies import (
     DependencyAnalysisAdapter,
     GraphEngineUnavailableError,
@@ -42,9 +43,19 @@ def get_latest(
     db: sqlite3.Connection = Depends(get_db),
 ) -> Optional[IncidentResponse]:
     """Retrieve the most recent incident or return null."""
+    # 1. Check operational storage for the latest incident
     incident = get_latest_incident(db)
     if incident is None:
         return None
+
+    # 2. Enrich with engine diagnostic details if available in memory
+    try:
+        engine_incident = get_incident_details(incident["id"])
+        if engine_incident is not None:
+            return IncidentResponse.model_validate(engine_incident.model_dump())
+    except Exception:
+        pass
+
     return IncidentResponse(**incident)
 
 
@@ -59,6 +70,15 @@ def get_by_id(
     db: sqlite3.Connection = Depends(get_db),
 ) -> IncidentResponse:
     """Retrieve an incident by ID or return 404 Not Found."""
+    # 1. Query the engine facade for the incident details
+    try:
+        engine_incident = get_incident_details(incident_id)
+        if engine_incident is not None:
+            return IncidentResponse.model_validate(engine_incident.model_dump())
+    except Exception:
+        pass
+
+    # 2. Fall back to operational storage
     incident = get_incident(db, incident_id)
     if incident is None:
         raise HTTPException(

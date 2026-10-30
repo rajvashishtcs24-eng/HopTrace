@@ -89,6 +89,7 @@ def run_lab_scenario(
             target_link_id=payload.target_link_id,
             target_node_id=payload.target_node_id,
             severity=payload.severity,
+            force_in_memory=True,
         )
     except Exception as exc:
         raise HTTPException(
