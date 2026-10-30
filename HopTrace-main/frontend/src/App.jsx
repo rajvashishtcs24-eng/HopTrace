@@ -172,7 +172,7 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '12px', backgroundColor: '#1e293b', border: '1px solid #475569' }}>
-            Source: <strong>{topology.data_source || 'simulated'}</strong>
+            Source: <strong>DEMO DATA ({topology.data_source || 'simulated'})</strong>
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '4px 10px', borderRadius: '12px', backgroundColor: backendOnline ? '#064e3b' : '#7f1d1d', color: backendOnline ? '#6ee7b7' : '#fca5a5' }}>
             {backendOnline ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
