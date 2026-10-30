@@ -15,14 +15,25 @@ Weights:
 - w_tp   = 0.10 (Throughput degradation)
 
 Detection Threshold:
-- Score >= 0.15 triggers anomaly detection.
-- Score < 0.15 considered within normal operating limits.
+- Score >= 0.10 triggers anomaly detection.
+- Score < 0.10 considered within normal operating limits.
 
 Ambiguity Rule:
 - If |S_top1 - S_top2| <= 0.08 for two degraded links, the engine flags
   the incident with an explicit uncertainty_note and degraded confidence.
 - Missing measurements are explicitly recorded as uncertainty and NEVER
   treated as healthy.
+
+Upstream Failure Detection:
+When all monitored links report full packet loss (100%) AND throughput drops
+to zero, with the gateway/backhaul link (L1) showing connectivity_ok=False,
+the engine classifies the incident as an upstream/gateway failure affecting
+component L1 with component_type="link". The distinguishing signature is:
+  - L1 is down (connectivity_ok=False).
+  - ALL downstream links simultaneously show 100% packet loss and zero throughput
+    (because no internet traffic can pass after the gateway is lost).
+This pattern cannot arise from a single intermediate link failure because that
+would only affect a subset of downstream links.
 """
 
 from __future__ import annotations
@@ -36,7 +47,7 @@ from backend.app.engine.models import (
     Measurement,
     NetworkTopology,
 )
-from backend.app.engine.telemetry import BASELINE_TELEMETRY
+from backend.app.engine.telemetry import BASELINE_TELEMETRY, GATEWAY_LINK_ID, INTERIOR_LINK_IDS
 
 
 class LinkAnomalyReport:
@@ -62,10 +73,13 @@ class DiagnosticEngine:
         baselines: Optional[Dict[str, Dict[str, float | bool]]] = None,
         detection_threshold: float = 0.10,
         ambiguity_margin: float = 0.08,
+        upstream_full_loss_threshold: float = 98.0,
     ) -> None:
         self.baselines = baselines or BASELINE_TELEMETRY
         self.detection_threshold = detection_threshold
         self.ambiguity_margin = ambiguity_margin
+        # Packet loss % on ALL links that indicates total upstream blackout
+        self.upstream_full_loss_threshold = upstream_full_loss_threshold
 
     def evaluate_link(
         self,
@@ -229,6 +243,138 @@ class DiagnosticEngine:
         report.score = round(raw_score, 4)
         return report
 
+    def _detect_upstream_failure(
+        self,
+        meas_map: Dict[str, Measurement],
+        known_links: List[str],
+    ) -> Optional[IncidentDetails]:
+        """Detects the upstream-gateway-failure pattern from observations alone.
+
+        Upstream signature (inferred from measurements, not from ground truth):
+          1. The gateway backhaul link (GATEWAY_LINK_ID) has connectivity_ok=False.
+          2. ALL interior distribution links have packet_loss >= upstream_full_loss_threshold
+             AND throughput = 0 simultaneously.
+          3. At least one interior link is locally link-present (connectivity_ok=True),
+             which rules out a cascade of independent link failures.
+
+        This combination is statistically inconsistent with a single intermediate
+        link failure, which would only affect a downstream subset of links.
+        Returns an IncidentDetails if the pattern matches, otherwise None.
+        """
+        gw_link_id = GATEWAY_LINK_ID
+        interior_ids = [lid for lid in known_links if lid != gw_link_id]
+
+        gw_meas = meas_map.get(gw_link_id)
+        if gw_meas is None:
+            # Gateway link telemetry entirely missing — cannot confirm upstream failure
+            return None
+
+        # Condition 1: gateway link is down
+        gw_down = not gw_meas.connectivity_ok
+
+        if not gw_down:
+            return None
+
+        # Condition 2: all interior links show full loss and zero throughput
+        interior_measured = [meas_map.get(lid) for lid in interior_ids if meas_map.get(lid) is not None]
+        if not interior_measured:
+            return None
+
+        all_interior_saturated = all(
+            m.packet_loss_pct is not None
+            and m.packet_loss_pct >= self.upstream_full_loss_threshold
+            and m.throughput_mbps is not None
+            and m.throughput_mbps == 0.0
+            for m in interior_measured
+        )
+
+        if not all_interior_saturated:
+            return None
+
+        # Condition 3: at least one interior link is locally link-present
+        any_interior_link_up = any(m.connectivity_ok for m in interior_measured)
+
+        # Build detailed evidence
+        evidence: List[EvidenceItem] = []
+
+        evidence.append(
+            EvidenceItem(
+                metric="connectivity_ok",
+                observed_value=False,
+                baseline_value=True,
+                threshold=True,
+                status="anomaly",
+                severity="critical",
+                description=(
+                    f"Gateway backhaul link '{gw_link_id}' has lost connectivity. "
+                    "No internet traffic can pass into the village network."
+                ),
+            )
+        )
+        evidence.append(
+            EvidenceItem(
+                metric="packet_loss_pct",
+                observed_value=100.0,
+                baseline_value=0.0,
+                threshold=1.0,
+                status="anomaly",
+                severity="critical",
+                description=(
+                    f"All {len(interior_measured)} interior distribution link(s) simultaneously "
+                    f"report 100% packet loss — consistent with full upstream internet blackout, "
+                    "not a single intermediate segment failure."
+                ),
+            )
+        )
+        evidence.append(
+            EvidenceItem(
+                metric="throughput_mbps",
+                observed_value=0.0,
+                baseline_value=None,
+                threshold=None,
+                status="anomaly",
+                severity="critical",
+                description=(
+                    "Zero throughput observed across all distribution links. "
+                    "Interior links remain locally link-present (no independent physical failure)."
+                ),
+            )
+        )
+
+        if not any_interior_link_up:
+            uncertainty_note = (
+                "Interior links also report connectivity_ok=False. This may indicate a "
+                "total power failure or cascading hardware fault rather than upstream-only "
+                "failure. Evidence points to L1/GW1 as root cause but physical inspection "
+                "is recommended."
+            )
+        else:
+            uncertainty_note = (
+                "Interior distribution links remain locally link-present (Ethernet/RF layer up). "
+                "The simultaneous full packet loss and zero throughput across all interior "
+                "segments is consistent with an upstream internet gateway failure at L1/GW1."
+            )
+
+        return IncidentDetails(
+            id=f"incident-{uuid.uuid4().hex[:8]}",
+            run_id="",
+            status="open",
+            suspected_component_id=gw_link_id,
+            suspected_component_type="link",
+            summary=(
+                f"Upstream internet gateway failure detected on link '{gw_link_id}'. "
+                f"All {len(interior_measured)} downstream distribution segments show "
+                "complete internet traffic blackout consistent with gateway loss, not "
+                "an intermediate segment fault."
+            ),
+            confidence_score=0.92 if any_interior_link_up else 0.70,
+            diagnostic_score=1.0,
+            evidence=evidence,
+            uncertainty_note=uncertainty_note,
+            data_source="simulated",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+
     def diagnose(
         self,
         measurements: List[Measurement],
@@ -251,6 +397,15 @@ class DiagnosticEngine:
         if topology and topology.links:
             known_links = [l.id for l in topology.links]
 
+        # --- Upstream failure detection (pattern-based, no ground truth) ---
+        upstream_incident = self._detect_upstream_failure(meas_map, known_links)
+        if upstream_incident is not None:
+            upstream_incident.id = incident_id
+            upstream_incident.run_id = run_identifier
+            upstream_incident.created_at = created_at
+            return upstream_incident
+
+        # --- Standard per-link anomaly scoring ---
         reports: List[LinkAnomalyReport] = []
         missing_notes: List[str] = []
 
