@@ -32,6 +32,8 @@ from backend.app.engine.topology import (
 from backend.app.engine.telemetry import (
     BASELINE_TELEMETRY,
     SEVERITY_FACTORS,
+    GATEWAY_LINK_ID,
+    INTERIOR_LINK_IDS,
     SimulatedTelemetryGenerator,
 )
 from backend.app.engine.diagnostics import (
@@ -84,6 +86,8 @@ __all__ = [
     # Telemetry
     "BASELINE_TELEMETRY",
     "SEVERITY_FACTORS",
+    "GATEWAY_LINK_ID",
+    "INTERIOR_LINK_IDS",
     "SimulatedTelemetryGenerator",
     # Diagnostics
     "DiagnosticEngine",

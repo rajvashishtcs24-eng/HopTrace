@@ -338,3 +338,90 @@ NEO4J_PASSWORD=your_aura_password_here
    ```bash
    python -m pytest tests/engine -v
    ```
+
+
+---
+
+## 8. Upstream Failure Scenario
+
+### 8.1 Scenario Description
+
+The `upstream_failure` scenario models a complete loss of the gateway backhaul link (`L1`) — the fiber PoP connection between `GW1` and `R1`. This is the most catastrophic failure mode: it terminates all internet connectivity for every subscriber in the village while interior infrastructure (bridges, access points, wired switches) remains locally powered and link-present.
+
+### 8.2 Constants
+
+```python
+from backend.app.engine import GATEWAY_LINK_ID, INTERIOR_LINK_IDS
+
+GATEWAY_LINK_ID = "L1"                          # The single upstream fiber backhaul link
+INTERIOR_LINK_IDS = ["L2", "L3", "L4", "L5"]  # All downstream distribution links
+```
+
+These constants are centralized in `telemetry.py` and exported via `backend/app/engine/__init__.py`. Tests and diagnostic code import them to avoid magic strings.
+
+### 8.3 Telemetry Fingerprint
+
+When `upstream_failure` is active, each link reports:
+
+| Link | `connectivity_ok` | `packet_loss_pct` | `throughput_mbps` | `latency_ms` | Interpretation |
+|------|:-----------------:|:-----------------:|:-----------------:|:------------:|----------------|
+| L1 (GW1 → R1) | `False` | 100.0 | 0.0 | `None` | Gateway link is down |
+| L2 (R1 → WB1) | `True` | 100.0 | 0.0 | `None` | Locally up, no internet traffic |
+| L3 (WB1 → WB2) | `True` | 100.0 | 0.0 | `None` | Locally up, no internet traffic |
+| L4 (WB2 → AP1) | `True` | 100.0 | 0.0 | `None` | Locally up, no internet traffic |
+| L5 (R1 → AP2) | `True` | 100.0 | 0.0 | `None` | Locally up, no internet traffic |
+
+`latency_ms = None` on interior links because there is no routable internet path to measure round-trip time against. The diagnostic engine treats `None` latency as an unmonitored / unresolvable signal — never as healthy.
+
+All measurements carry `data_source = "simulated"`.
+
+### 8.4 Upstream Failure Detection Algorithm (`_detect_upstream_failure`)
+
+The `DiagnosticEngine` runs this check **before** the standard per-link anomaly scoring. If all three conditions below are met, the engine returns a high-confidence upstream failure incident without falling through to the ambiguity logic:
+
+| # | Condition | Rationale |
+|---|-----------|-----------|
+| 1 | Gateway link (`L1`) has `connectivity_ok = False` | Confirms the backhaul link is physically or logically down |
+| 2 | **All** interior links have `packet_loss_pct >= 98.0%` AND `throughput_mbps == 0.0` | Confirms total saturation downstream — no internet traffic flows through any branch |
+| 3 | At least one interior link has `connectivity_ok = True` | Rules out a simultaneous multi-segment hardware cascade; distinguishes upstream failure from a total infrastructure collapse |
+
+If any condition fails the method returns `None`, and the standard scoring path handles the incident.
+
+#### Confidence Assignment
+
+| Situation | `diagnostic_score` | `confidence_score` | Explanation |
+|-----------|:------------------:|:------------------:|-------------|
+| Conditions 1–3 all met (interior links locally up) | `1.0` | `0.92` | Strong fingerprint; minor uncertainty because simulated measurements cannot capture every real-world edge case |
+| Conditions 1–2 met but interior links also down | `1.0` | `0.70` | Evidence still points upstream but ambiguity with total-infrastructure collapse is higher |
+
+The engine **never** fabricates a probability of correctness. The `0.92` / `0.70` figures are documented engineering estimates, not statistical claims.
+
+### 8.5 Uniqueness of the Upstream Fingerprint
+
+An intermediate link fault (e.g., `L3` degraded) shows high anomaly score on `L3` only; `L2` and `L5` remain within healthy baseline. The standard scoring path then correctly identifies `L3`.
+
+An upstream failure shows **all five links simultaneously at 100% loss / zero throughput**. No single intermediate fault can produce this pattern across both independent distribution branches (`L2`→`L3`→`L4` and `L5`). `_detect_upstream_failure` exploits this fact for unambiguous identification.
+
+### 8.6 Downstream Subscriber Impact
+
+Because `L1` is the sole gateway link and the topology uses single-path routing with no redundancy, every subscriber is affected:
+
+```
+L1 failure → R1 isolated from internet
+           ├── WB1 → WB2 → AP1 → SUB101, SUB102  (affected)
+           └── AP2 → SUB201, SUB202, SUB203       (affected)
+```
+
+The existing `get_affected_subscribers` graph dependency query (§ 3.3) correctly returns all 5 subscribers when `suspected_component_id = "L1"`, because the query traverses `:LINK*0..` from the link's target device (`R1`) downstream through all access points.
+
+### 8.7 Test Coverage
+
+New tests in `tests/engine/test_upstream_failure.py`:
+
+| Section | Tests |
+|---------|-------|
+| A — Telemetry correctness | Gateway link down; interior links locally up; measurements deterministic; all 5 links present |
+| B — Diagnostic identification | Upstream fault identified; evidence content; uncertainty note present; no false alarm on baseline; direct engine class call |
+| C — Ground-truth separation | Diagnostic signature does not accept `target_node_id`; inference without supplying topology |
+| D — Subscriber impact | In-memory graph returns all 5 subscribers; full facade pipeline |
+| E — Ambiguous / edge cases | Partial gateway degradation not classified as upstream failure; upstream-down with healthy interior falls to standard scoring |

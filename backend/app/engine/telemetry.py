@@ -9,6 +9,22 @@ Documented Baseline Model:
 - L3 (Wireless PtP Bridge): 25.0 ms latency, 0.5% loss, 35.0 Mbps throughput, OK.
 - L4 (North AP Ethernet): 3.0 ms latency, 0.0% loss, 50.0 Mbps throughput, OK.
 - L5 (South AP Ethernet): 5.0 ms latency, 0.0% loss, 60.0 Mbps throughput, OK.
+
+Upstream Failure Model (upstream_failure scenario):
+When the upstream gateway (GW1) or its fiber connection fails:
+  - L1 (GW1->R1): loses connectivity completely.
+      connectivity_ok=False, packet_loss_pct=100.0, throughput_mbps=0.0,
+      latency_ms=None (internet targets unreachable).
+  - L2–L5 (interior distribution links): remain locally link-present at the
+      Ethernet/RF layer (the village LAN is still switched), but carry zero
+      internet traffic. Observed pattern:
+      connectivity_ok=True (local physical layer up),
+      packet_loss_pct=100.0 (no internet frames pass),
+      throughput_mbps=0.0 (no internet data),
+      latency_ms=None (internet ICMP targets unreachable).
+  This fingerprint — gateway link fully down, all downstream links showing
+  full packet loss with no measurable internet latency — is the canonical
+  upstream failure signature used by the diagnostic engine.
 """
 
 from __future__ import annotations
@@ -71,6 +87,13 @@ SEVERITY_FACTORS = {
     },
 }
 
+# Upstream-gateway links: the link ID that directly terminates at GW1 (gateway).
+# In the canonical topology this is L1 (GW1 -> R1).
+# Interior distribution links share the upstream failure symptom differently:
+# they remain locally link-present but carry zero internet traffic.
+GATEWAY_LINK_ID = "L1"
+INTERIOR_LINK_IDS = ["L2", "L3", "L4", "L5"]
+
 
 class SimulatedTelemetryGenerator:
     """Produces deterministic simulated telemetry for laboratory scenarios."""
@@ -96,7 +119,10 @@ class SimulatedTelemetryGenerator:
         Supported scenarios:
         - baseline: All links report healthy baseline values.
         - degrade_link: Target link suffers increased latency, packet loss, and reduced throughput.
-        - access_point_failure: Target AP link suffers complete connectivity failure.
+        - access_point_failure: Target AP's incoming link suffers complete connectivity failure.
+        - upstream_failure: Gateway or upstream fiber fails (target_node_id="GW1" or similar).
+            L1 loses full connectivity; L2-L5 stay locally link-present but
+            carry zero internet traffic (packet_loss=100%, throughput=0, latency=null).
         - ambiguous_fault: Multiple links (e.g., L2 and L3) suffer equal degradation.
         - missing_measurements: Selected links have null or missing telemetry.
         """
@@ -117,7 +143,7 @@ class SimulatedTelemetryGenerator:
                 degraded_links[lid] = factors
 
         for link_id, base in self.baselines.items():
-            # Check if this link should be completely omitted or have null measurements
+            # Check if this link should have null measurements
             if link_id in missing_set:
                 measurements.append(
                     Measurement(
@@ -132,7 +158,37 @@ class SimulatedTelemetryGenerator:
                 )
                 continue
 
-            # Check if this is an access point failure scenario
+            # upstream_failure scenario: gateway link drops, interior links saturate
+            if scenario == "upstream_failure":
+                if link_id == GATEWAY_LINK_ID:
+                    # Gateway link: full connectivity loss
+                    measurements.append(
+                        Measurement(
+                            component_id=link_id,
+                            timestamp_utc=ts,
+                            latency_ms=None,
+                            packet_loss_pct=100.0,
+                            throughput_mbps=0.0,
+                            connectivity_ok=False,
+                            data_source="simulated",
+                        )
+                    )
+                else:
+                    # Interior distribution links: locally up, zero internet traffic
+                    measurements.append(
+                        Measurement(
+                            component_id=link_id,
+                            timestamp_utc=ts,
+                            latency_ms=None,
+                            packet_loss_pct=100.0,
+                            throughput_mbps=0.0,
+                            connectivity_ok=True,
+                            data_source="simulated",
+                        )
+                    )
+                continue
+
+            # access_point_failure scenario
             if scenario == "access_point_failure":
                 # If target is AP1, incoming link L4 fails; if AP2, link L5 fails
                 if (target_node_id == "AP1" and link_id == "L4") or (
@@ -151,7 +207,7 @@ class SimulatedTelemetryGenerator:
                     )
                     continue
 
-            # Check if this link is degraded
+            # degrade_link / ambiguous_fault scenario
             if link_id in degraded_links:
                 f = degraded_links[link_id]
                 base_lat = float(base["latency_ms"])
