@@ -307,10 +307,10 @@ def test_clean_api_error_handling(client: TestClient) -> None:
     assert r2.status_code == 422
     assert "detail" in r2.json()
 
-    # 3. 501 Not Implemented (upstream_failure)
+    # 3. 422 Unprocessable Entity for invalid target node in upstream_failure
     r3 = client.post(
         "/api/v1/lab/run",
-        json={"scenario": "upstream_failure", "target_node_id": "GW1"},
+        json={"scenario": "upstream_failure", "target_node_id": "NON_EXISTENT_NODE"},
     )
-    assert r3.status_code == 501
-    assert "not currently supported" in r3.json()["detail"].lower()
+    assert r3.status_code == 422
+    assert "not found in network topology" in r3.json()["detail"].lower()

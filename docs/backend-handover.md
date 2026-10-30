@@ -154,9 +154,9 @@ All endpoints use base path `/api/v1`:
 ### 4.3 Simulation Lab & Measurements
 - **`POST /api/v1/lab/run`**
   - **Purpose:** Execute a network test scenario (`baseline`, `degrade_link`, `access_point_failure`, `upstream_failure`).
-  - **Body:** `{"scenario": "degrade_link", "target_link_id": "L3", "severity": "high"}`
+  - **Body:** `{"scenario": "degrade_link", "target_link_id": "L3", "severity": "high"}` or `{"scenario": "upstream_failure", "target_node_id": "GW1", "severity": "high"}`
   - **Response 200:** `{"run_id": "run-...", "data_source": "simulated", "measurements_count": 5, "incident_id": "inc-..."}`
-  - **Errors:** 422 (Invalid targets/scenario), 501 (`upstream_failure` not yet implemented in simulation engine).
+  - **Errors:** 422 (Invalid targets/scenario), 500 (Execution failure), 503 (Topology unavailable).
 - **`GET /api/v1/runs/{run_id}/measurements`**
   - **Purpose:** Retrieve component telemetry observations for a test run.
   - **Response 200:** `{"run_id": "...", "data_source": "simulated", "measurements": [...]}`
@@ -198,7 +198,7 @@ When a lab scenario runs:
 From repository root:
 
 ```bash
-# Run all tests (144 unit tests offline in ~0.7s)
+# Run all tests (167 unit tests offline in ~0.7s, 2 skipped)
 backend/.venv/bin/python -m pytest -v
 
 # Run only API engine integration tests
@@ -220,9 +220,7 @@ See [`docs/test-plan.md`](file:///Users/rahulrajput/Documents/HopTrace/docs/test
    - Live Sarvam AI API calls require a valid `SARVAM_API_KEY`. Without it, `/explain` honestly returns 503.
 4. **Ephemeral Run/Incident Memory:**  
    Run measurements (`/runs/{id}/measurements`) are stored in `HopTraceEngine._runs` in memory. If the backend restarts, past run measurements return 404 (persisted incidents remain in SQLite).
-5. **Upstream Failure Limitation:**  
-   The scenario `upstream_failure` currently returns HTTP 501 Not Implemented because the underlying simulation engine has not implemented upstream telemetry models yet.
-6. **No Run History Table:**  
+5. **No Run History Table:**  
    Persisting historical lab run telemetry into SQLite is deferred as future work.
 
 ---
@@ -235,8 +233,6 @@ See [`docs/test-plan.md`](file:///Users/rahulrajput/Documents/HopTrace/docs/test
    Switch `force_in_memory=False` when `NEO4J_URI` and credentials are authenticated to enable live Cypher graph queries.
 3. **Telemetry Streaming:**  
    Implement WebSocket or SSE endpoints for real-time telemetry streaming to the frontend.
-4. **Implement Upstream Failure Telemetry:**  
-   Extend `SimulatedTelemetryGenerator` in `backend/app/engine/telemetry.py` to support `upstream_failure`.
 
 ---
 

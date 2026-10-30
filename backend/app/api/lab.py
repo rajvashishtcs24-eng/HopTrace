@@ -39,7 +39,6 @@ def run_lab_scenario(
     - 200: Test scenario executed successfully.
     - 422: Invalid scenario, invalid severity, missing required target, or invalid target ID.
     - 500: Persistence or execution failure.
-    - 501: Scenario unsupported by the underlying simulation engine (e.g. upstream_failure).
     - 503: Network topology is currently unavailable.
     """
     # 1. Target validation against actual topology
@@ -74,11 +73,6 @@ def run_lab_scenario(
                 status_code=422,
                 detail=f"Target node '{payload.target_node_id}' not found in network topology",
             )
-        # Engine-side limitation: SimulatedTelemetryGenerator has no upstream_failure implementation.
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Scenario 'upstream_failure' is not currently supported by the simulation engine.",
-        )
 
     # 2. Execute scenario via engine facade
     # CRITICAL: Diagnostic engine infers root-cause solely from observations.

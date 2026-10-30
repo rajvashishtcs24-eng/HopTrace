@@ -2,7 +2,7 @@
 
 **Project:** HopTrace  
 **Module:** Backend & Graph Engine Integration  
-**Status:** 144 passed, 2 skipped, 0 failed (Total 146 tests)  
+**Status:** 167 passed, 2 skipped, 0 failed (Total 169 tests)  
 **Execution Runtime:** ~0.7 seconds  
 
 ---
@@ -13,7 +13,7 @@ The HopTrace backend testing strategy enforces strict correctness, contract comp
 - **No False Claims / Honest Failure:** When an external dependency (Neo4j, Sarvam AI) is offline or unconfigured, endpoints return HTTP 503 instead of fabricating data.
 - **Evaluation Separation:** The diagnostic engine inferring root cause never receives the injected fault label or scenario name.
 - **Contract Adherence:** All responses strictly follow [`docs/api-contract.md`](file:///Users/rahulrajput/Documents/HopTrace/docs/api-contract.md).
-- **Fast and Offline-First:** 144 out of 146 tests run completely offline in under 1 second using an in-memory graph mirror and temporary SQLite instances.
+- **Fast and Offline-First:** 167 out of 169 tests run completely offline in under 1 second using an in-memory graph mirror and temporary SQLite instances.
 
 ---
 
@@ -80,6 +80,12 @@ Tests `POST /api/v1/incidents/{id}/explain` and provider implementations:
 | `test_registry_explanation_provider_selection` | Registry instantiates correct provider based on `EXPLANATION_PROVIDER`. |
 | `test_sarvam_provider_init_guards` | Rejects blank model or non-positive timeout with clean `ValueError`. |
 | `test_sarvam_provider_missing_key_raises_unavailable` | Unconfigured `SARVAM_API_KEY` raises `ExplanationProviderUnavailableError` without credential leakage. |
+| `test_sarvam_provider_mock_hindi_success` | End-to-end: configured Sarvam provider generates grounded Hindi explanation via mocked chat completion. |
+| `test_sarvam_provider_mock_auth_failure_returns_503` | HTTP 401 from provider returns 503 without leaking credentials or request headers. |
+| `test_sarvam_provider_mock_timeout_returns_503` | TimeoutError from provider returns 503 with safe timeout message. |
+| `test_sarvam_provider_mock_network_error_returns_503` | URLError from provider returns 503 indicating network failure. |
+| `test_sarvam_provider_mock_malformed_response_returns_503` | Non-JSON or unexpected structure from provider returns 503. |
+| `test_sarvam_provider_missing_key_via_api_returns_503` | API returns 503 when `EXPLANATION_PROVIDER=sarvam` but `SARVAM_API_KEY=""`. |
 
 ### 3.3 Health Endpoint (`tests/api/test_health.py`)
 | Test Name | Verified Behavior |
@@ -113,8 +119,11 @@ Tests `POST /api/v1/incidents/{id}/explain` and provider implementations:
 | `test_lab_run_access_point_failure_non_ap_node_422` | Rejects non-AP target with 422. |
 | `test_lab_run_missing_target_link_422` | Rejects degrade_link without `target_link_id`. |
 | `test_lab_run_target_link_not_in_topology_422` | Rejects invalid link identifier with 422. |
-| `test_lab_run_upstream_failure_missing_target_node_422` | Target node required for upstream failure. |
-| `test_lab_run_upstream_failure_returns_501` | Returns 501 Not Implemented because simulation engine does not yet implement upstream telemetry. |
+| `test_lab_run_upstream_failure_missing_target_node_422` | Target node required for upstream failure (422). |
+| `test_lab_run_upstream_failure_whitespace_target_node_422` | Whitespace target node rejected with 422. |
+| `test_lab_run_upstream_failure_success` | Executes upstream_failure scenario, returning run metadata and incident ID. |
+| `test_lab_run_upstream_failure_non_existent_target_node_422` | Non-existent target node rejected with 422. |
+| `test_lab_run_upstream_failure_affected_subscribers_and_measurements` | Full pipeline: upstream failure creates incident affecting all 5 subscribers and creates measurements. |
 | `test_lab_run_invalid_scenario_422` | Unknown scenario name returns 422. |
 | `test_lab_run_invalid_severity_422` | Invalid severity returns 422. |
 | `test_lab_run_incident_persisted_in_sqlite` | Incident generated during lab run is persisted into SQLite database. |
@@ -155,7 +164,7 @@ Tests `POST /api/v1/incidents/{id}/explain` and provider implementations:
 | `test_registry_invalid_topology_provider_fails` | Invalid configuration raises clear `ValueError`. |
 
 ### 3.9 Engine Diagnostics & Graph Unit Tests (`tests/engine/`)
-65 engine tests covering mathematical telemetry models, Cypher generation, graph stores, and fault localization:
+80 engine tests covering mathematical telemetry models, Cypher generation, graph stores, and fault localization:
 - **Baseline:** Tests healthy metrics generation and 0 false positives (`test_baseline.py`).
 - **Degraded Link:** Parameterized tests for low, medium, and high severity degradation on links L1–L5 (`test_degraded_link.py`).
 - **Ambiguity Detection:** Verifies that links with near-identical anomalous scores trigger `uncertainty_note` and reduced confidence (`test_ambiguity.py`).
@@ -164,6 +173,7 @@ Tests `POST /api/v1/incidents/{id}/explain` and provider implementations:
 - **Idempotent Seeding:** Tests that repeated seedings in memory and Neo4j do not duplicate nodes (`test_idempotent_seeding.py`).
 - **Subscriber Dependencies:** Verifies graph traversal from damaged components to downstream subscribers (`test_subscribers.py`).
 - **Neo4j Client Lifecycle:** Tests credential parsing, URI sanitization, and offline connection handling (`test_neo4j_client.py`).
+- **Upstream Failure:** 15 dedicated tests covering gateway outage telemetry, interior link saturation patterns, diagnostic inference, and affected-subscriber impact (`test_upstream_failure.py`).
 
 ---
 
