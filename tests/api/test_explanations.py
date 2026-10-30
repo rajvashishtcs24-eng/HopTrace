@@ -151,3 +151,156 @@ def test_sarvam_provider_missing_key_raises_unavailable() -> None:
     with pytest.raises(ExplanationProviderUnavailableError) as exc:
         provider.explain_incident({"id": "inc-1"}, "hi")
     assert "not configured" in str(exc.value).lower()
+
+
+# ── Sarvam Provider Mocked End-to-End Tests ─────────────────────────────────
+
+def _make_mock_response(content_bytes: bytes):
+    """Helper to construct a mock urllib.request context manager."""
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = content_bytes
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+    return mock_resp
+
+
+def test_sarvam_provider_mock_hindi_success(client: TestClient, isolated_db: str, monkeypatch) -> None:
+    """End-to-end: configured Sarvam provider generates Hindi explanation grounded in incident data."""
+    import json
+
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "mock-secret-key-xyz")
+    monkeypatch.setattr(settings, "sarvam_model", "sarvam-105b")
+    monkeypatch.setattr(settings, "sarvam_timeout_seconds", 30.0)
+
+    hindi_text = "नेटवर्क में लिंक L2 पर गंभीर खराबी पाई गई है। 2 ग्राहक प्रभावित हो सकते हैं।"
+    sarvam_payload = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": hindi_text,
+                }
+            }
+        ]
+    }
+    raw_response = json.dumps(sarvam_payload).encode("utf-8")
+
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(raw_response)):
+        resp = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["incident_id"] == "incident-001"
+        assert data["language"] == "hi"
+        assert data["explanation"] == hindi_text
+        assert data["provider"] == "sarvam"
+
+
+def test_sarvam_provider_mock_auth_failure_returns_503(
+    client: TestClient, isolated_db: str, monkeypatch
+) -> None:
+    """When Sarvam API returns HTTP 401 Unauthorized, endpoint returns 503 without leaking credentials."""
+    import urllib.error
+
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "secret-invalid-key")
+    monkeypatch.setattr(settings, "sarvam_model", "sarvam-105b")
+
+    http_error = urllib.error.HTTPError(
+        url="https://api.sarvam.ai/v1/chat/completions",
+        code=401,
+        msg="Unauthorized",
+        hdrs={},  # type: ignore[arg-type]
+        fp=None,
+    )
+
+    with patch("urllib.request.urlopen", side_effect=http_error):
+        resp = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp.status_code == 503
+        detail = resp.json()["detail"]
+        assert "401" in detail
+        # Strict security assertion: API key must never appear in response
+        assert "secret-invalid-key" not in detail
+
+
+def test_sarvam_provider_mock_timeout_returns_503(
+    client: TestClient, isolated_db: str, monkeypatch
+) -> None:
+    """When Sarvam API times out, endpoint returns 503 with timeout message."""
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "mock-key")
+    monkeypatch.setattr(settings, "sarvam_timeout_seconds", 5.0)
+
+    with patch("urllib.request.urlopen", side_effect=TimeoutError()):
+        resp = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp.status_code == 503
+        detail = resp.json()["detail"]
+        assert "timed out after 5.0s" in detail
+
+
+def test_sarvam_provider_mock_network_error_returns_503(
+    client: TestClient, isolated_db: str, monkeypatch
+) -> None:
+    """When network connection to Sarvam fails, endpoint returns 503."""
+    import urllib.error
+
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "mock-key")
+
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("DNS resolution failed")):
+        resp = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp.status_code == 503
+        assert "could not reach the sarvam api" in resp.json()["detail"].lower()
+
+
+def test_sarvam_provider_mock_malformed_response_returns_503(
+    client: TestClient, isolated_db: str, monkeypatch
+) -> None:
+    """When Sarvam returns non-JSON or unexpected structure, endpoint returns 503."""
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "mock-key")
+
+    # Non-JSON
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(b"<html>502 Bad Gateway</html>")):
+        resp1 = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp1.status_code == 503
+        assert "could not be parsed as json" in resp1.json()["detail"].lower()
+
+    # Missing choices
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(b'{"status": "ok"}')):
+        resp2 = client.post(
+            "/api/v1/incidents/incident-001/explain",
+            json={"language": "hi"},
+        )
+        assert resp2.status_code == 503
+        assert "did not contain the expected" in resp2.json()["detail"].lower()
+
+
+def test_sarvam_provider_missing_key_via_api_returns_503(
+    client: TestClient, isolated_db: str, monkeypatch
+) -> None:
+    """When EXPLANATION_PROVIDER=sarvam but SARVAM_API_KEY is empty, endpoint returns 503."""
+    monkeypatch.setattr(settings, "explanation_provider", "sarvam")
+    monkeypatch.setattr(settings, "sarvam_api_key", "")
+
+    resp = client.post(
+        "/api/v1/incidents/incident-001/explain",
+        json={"language": "hi"},
+    )
+    assert resp.status_code == 503
+    assert "sarvam api key is not configured" in resp.json()["detail"].lower()

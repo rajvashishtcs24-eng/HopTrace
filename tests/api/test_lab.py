@@ -320,10 +320,10 @@ def test_lab_run_persistence_failure_returns_500(client: TestClient, isolated_db
         assert "Failed to persist incident" in response.json()["detail"]
 
 
-# ── 13. Unsupported upstream_failure Handled Honestly ────────────────────────
+# ── 13. Upstream Failure Scenario Integration ───────────────────────────
 
-def test_lab_run_unsupported_upstream_failure_returns_501(client: TestClient, isolated_db: str) -> None:
-    """upstream_failure is rejected with HTTP 501 honestly because engine does not support it."""
+def test_lab_run_upstream_failure_success(client: TestClient, isolated_db: str) -> None:
+    """upstream_failure executes successfully, generates measurements, and opens an incident."""
     response = client.post(
         "/api/v1/lab/run",
         json={
@@ -332,8 +332,81 @@ def test_lab_run_unsupported_upstream_failure_returns_501(client: TestClient, is
             "severity": "high",
         },
     )
-    assert response.status_code == 501
-    assert "upstream_failure" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert data["run_id"].startswith("run-")
+    assert data["data_source"] == "simulated"
+    assert data["measurements_count"] == 5
+    assert data["incident_id"] is not None
+
+    # Verify incident persisted in SQLite with inferred L1 suspect
+    conn = get_db_connection(isolated_db)
+    try:
+        inc = get_incident(conn, data["incident_id"])
+        assert inc is not None
+        assert inc["suspected_component_id"] == "L1"
+        assert inc["suspected_component_type"] == "link"
+        assert inc["status"] == "open"
+        assert inc["data_source"] == "simulated"
+    finally:
+        conn.close()
+
+
+def test_lab_run_upstream_failure_non_existent_target_node_422(
+    client: TestClient, isolated_db: str
+) -> None:
+    """upstream_failure with a non-existent target node returns 422."""
+    response = client.post(
+        "/api/v1/lab/run",
+        json={
+            "scenario": "upstream_failure",
+            "target_node_id": "UNKNOWN_GATEWAY",
+            "severity": "high",
+        },
+    )
+    assert response.status_code == 422
+    assert "not found in network topology" in response.json()["detail"]
+
+
+def test_lab_run_upstream_failure_affected_subscribers_and_measurements(
+    client: TestClient, isolated_db: str
+) -> None:
+    """Full workflow: upstream_failure creates incident affecting all 5 subscribers and creates measurements."""
+    lab_resp = client.post(
+        "/api/v1/lab/run",
+        json={
+            "scenario": "upstream_failure",
+            "target_node_id": "GW1",
+            "severity": "high",
+        },
+    )
+    assert lab_resp.status_code == 200
+    run_id = lab_resp.json()["run_id"]
+    incident_id = lab_resp.json()["incident_id"]
+    assert incident_id is not None
+
+    # 1. Check affected subscribers: all 5 downstream subscribers must be affected
+    aff_resp = client.get(f"/api/v1/incidents/{incident_id}/affected-subscribers")
+    assert aff_resp.status_code == 200
+    aff_data = aff_resp.json()
+    assert aff_data["count"] == 5
+    sub_ids = {s["id"] for s in aff_data["subscribers"]}
+    assert sub_ids == {"SUB101", "SUB102", "SUB201", "SUB202", "SUB203"}
+
+    # 2. Check measurements: L1 has connectivity_ok=False; interior links have connectivity_ok=True but 100% loss
+    meas_resp = client.get(f"/api/v1/runs/{run_id}/measurements")
+    assert meas_resp.status_code == 200
+    meas_data = meas_resp.json()
+    assert meas_data["data_source"] == "simulated"
+    assert len(meas_data["measurements"]) == 5
+
+    meas_map = {m["component_id"]: m for m in meas_data["measurements"]}
+    assert meas_map["L1"]["connectivity_ok"] is False
+    assert meas_map["L1"]["packet_loss_pct"] == 100.0
+    for interior in ["L2", "L3", "L4", "L5"]:
+        assert meas_map[interior]["connectivity_ok"] is True
+        assert meas_map[interior]["packet_loss_pct"] == 100.0
+        assert meas_map[interior]["throughput_mbps"] == 0.0
 
 
 # ── 14. Ambiguous Fault Scenario ─────────────────────────────────────────────
