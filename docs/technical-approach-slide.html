@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HopTrace - Technical Approach Slide</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .slide-canvas {
+      width: 1440px;
+      height: 810px;
+      margin: 16px auto;
+      background: #ffffff;
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Print styling for direct slide export */
+    @media print {
+      body {
+        background: transparent;
+      }
+      .slide-canvas {
+        margin: 0;
+        box-shadow: none;
+        border: none;
+        width: 100vw;
+        height: 100vh;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="p-4">
+
+  <!-- Slide Action Bar (Screenshot / Export reminder) -->
+  <div class="max-w-[1440px] mx-auto mb-3 flex items-center justify-between no-print px-2 text-xs text-slate-500 font-medium">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+      <span>HopTrace Technical Architecture Slide · Standard 16:9 Presentation Format</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono">1440 × 810 px (16:9)</span>
+      <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-semibold transition cursor-pointer shadow-sm">
+        🖨️ Export / Print Slide
+      </button>
+    </div>
+  </div>
+
+  <!-- 16:9 Presentation Slide Canvas -->
+  <div class="slide-canvas p-6">
+
+    <!-- ── TOP HEADER BAR ──────────────────────────────────────────────────────── -->
+    <header class="flex items-center justify-between border-b-2 border-slate-800 pb-3 mb-3">
+      <!-- Project Identifier (Pill) -->
+      <div class="flex items-center gap-3">
+        <div class="border-2 border-slate-900 rounded-full px-5 py-1.5 flex items-center gap-2 bg-slate-50 shadow-sm">
+          <span class="font-bold text-lg tracking-tight text-slate-900 font-serif">HopTrace</span>
+        </div>
+        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider pl-1">
+          Rural ISP Intelligence & Business Platform
+        </div>
+      </div>
+
+      <!-- Main Slide Title -->
+      <div class="text-center">
+        <h1 class="text-3xl font-extrabold tracking-wider text-slate-950 font-serif uppercase">
+          TECHNICAL APPROACH
+        </h1>
+        <p class="text-[11px] font-medium text-slate-600 tracking-wide mt-0.5">
+          End-to-End Fault Localization Pipeline · Graph Traversal · Regional Sarvam AI Intelligence
+        </p>
+      </div>
+
+      <!-- Hackathon / Theme Badge -->
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="text-[10px] font-bold text-blue-700 uppercase tracking-wider">HACKFRONT INDIA 2026</div>
+          <div class="text-xs font-extrabold text-slate-800">Theme T3.2: Village Telecom</div>
+        </div>
+        <div class="w-10 h-10 border border-slate-300 rounded-lg flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 text-indigo-700 font-black text-sm shadow-sm">
+          SIH
+        </div>
+      </div>
+    </header>
+
+    <!-- ── MAIN ARCHITECTURE FLOW (6-COLUMN HORIZONTAL PIPELINE) ────────────────── -->
+    <div class="grid grid-cols-12 gap-3 flex-1 items-stretch my-1">
+
+      <!-- COLUMN 1: Network Topology & Sources (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-white relative">
+        <div>
+          <div class="bg-blue-100 border border-blue-300 rounded px-2 py-1 text-center font-bold text-xs text-slate-900 mb-2">
+            Network Topology & Data
+          </div>
+
+          <div class="space-y-2">
+            <!-- Source 1: Physical Infrastructure -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                Physical Mesh Devices
+              </div>
+              <ul class="text-[10px] text-slate-600 space-y-0.5 list-disc list-inside">
+                <li><span class="font-mono font-medium text-slate-800">GW1</span>: Fiber PoP (Grid 230V)</li>
+                <li><span class="font-mono font-medium text-slate-800">R1</span>: Core Village Router</li>
+                <li><span class="font-mono font-medium text-slate-800">WB1/2</span>: 5GHz PtP Bridge</li>
+                <li><span class="font-mono font-medium text-slate-800">AP1/2</span>: Distribution APs</li>
+              </ul>
+            </div>
+
+            <!-- Source 2: Graph Store Schema -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Graph Model (Neo4j)
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Labeled property graph with <span class="font-mono font-semibold text-slate-800">:Device</span>, <span class="font-mono font-semibold text-slate-800">:Subscriber</span>, <span class="font-mono font-semibold text-slate-800">:LINK</span>, and <span class="font-mono font-semibold text-slate-800">:SERVES</span> edges.
+              </p>
+            </div>
+
+            <!-- Source 3: Solar & Battery Telemetry -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                Tower Solar Metrics
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Hilltop relay battery voltage (12.8V LiFePO4), charge current, and PoE bus status.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[9px] text-slate-400 text-center font-mono mt-1 border-t pt-1">
+          Input Layer: Heterogeneous Sources
+        </div>
+      </div>
+
+      <!-- Arrow 1 -> 2 -->
+      <div class="col-span-auto flex items-center justify-center -mx-2.5 z-10">
+        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow">
+          ➔
+        </div>
+      </div>
+
+      <!-- COLUMN 2: Telemetry Ingestion & Simulation (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-white">
+        <div>
+          <div class="bg-emerald-100 border border-emerald-300 rounded px-2 py-1 text-center font-bold text-xs text-slate-900 mb-2">
+            Telemetry Ingestion
+          </div>
+
+          <div class="space-y-2">
+            <!-- Stage 1: Deterministic Polling -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-0.5">
+                <span class="w-4 h-4 rounded bg-emerald-600 text-white text-[9px] flex items-center justify-center font-bold">1</span>
+                Baseline Observation
+              </div>
+              <p class="text-[10px] text-slate-600">
+                Measures 4 core KPIs across all hops:
+              </p>
+              <div class="grid grid-cols-2 gap-1 mt-1 text-[9px] font-mono text-slate-700 bg-white p-1 rounded border">
+                <div>• Latency (ms)</div>
+                <div>• Loss (%)</div>
+                <div>• Throughput</div>
+                <div>• Status (0/1)</div>
+              </div>
+            </div>
+
+            <!-- Stage 2: Controlled Degradation Simulator -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-0.5">
+                <span class="w-4 h-4 rounded bg-emerald-600 text-white text-[9px] flex items-center justify-center font-bold">2</span>
+                Scenario Simulator
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Simulates rain-fade attenuation, microwave link misalignments, and tower blackouts (Low / Med / High).
+              </p>
+            </div>
+
+            <!-- Stage 3: Provenance & Packaging -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5 mb-0.5">
+                <span class="w-4 h-4 rounded bg-emerald-600 text-white text-[9px] flex items-center justify-center font-bold">3</span>
+                Provenance Tagging
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Assigns deterministic Run UUIDs (<span class="font-mono text-[9px] text-emerald-800 font-bold">run-b89ca1b7</span>) and sets <span class="font-mono text-[9px]">data_source="simulated"</span>.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[9px] text-slate-400 text-center font-mono mt-1 border-t pt-1">
+          Strict Schema Validation (Pydantic v2)
+        </div>
+      </div>
+
+      <!-- Arrow 2 -> 3 -->
+      <div class="col-span-auto flex items-center justify-center -mx-2.5 z-10">
+        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow">
+          ➔
+        </div>
+      </div>
+
+      <!-- COLUMN 3: Graph Fault Localization Engine (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-white">
+        <div>
+          <div class="bg-purple-100 border border-purple-300 rounded px-2 py-1 text-center font-bold text-xs text-slate-900 mb-2">
+            Graph Diagnostic Engine
+          </div>
+
+          <div class="space-y-2">
+            <!-- Anomaly Normalization -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                Composite Scoring Model
+              </div>
+              <div class="bg-purple-50 border border-purple-200 rounded p-1 font-mono text-[9px] text-purple-900 leading-tight">
+                S = 0.40·s_conn + 0.30·s_loss + 0.20·s_lat + 0.10·s_tp
+              </div>
+              <p class="text-[9px] text-slate-600 mt-1 leading-snug">
+                Normalizes multi-dimensional deltas against baseline into bounded [0, 1] range.
+              </p>
+            </div>
+
+            <!-- Upstream Masking Suppression -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                Upstream Suppression
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Traverses tree upstream: suppresses downstream false alarms if parent node/link failed first. Isolates root cause.
+              </p>
+            </div>
+
+            <!-- Blind Box Rule Enforcement -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                Zero-Leakage Guarantee
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Engine never receives target IDs or ground-truth scenario name; operates strictly on telemetry evidence.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[9px] text-slate-400 text-center font-mono mt-1 border-t pt-1">
+          Heuristic Graph Traversal
+        </div>
+      </div>
+
+      <!-- Arrow 3 -> 4 -->
+      <div class="col-span-auto flex items-center justify-center -mx-2.5 z-10">
+        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow">
+          ➔
+        </div>
+      </div>
+
+      <!-- COLUMN 4: Diagnostic Findings & Impact (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-white">
+        <div>
+          <div class="bg-amber-100 border border-amber-300 rounded px-2 py-1 text-center font-bold text-xs text-slate-900 mb-2">
+            Findings & Impact Analysis
+          </div>
+
+          <div class="space-y-2">
+            <!-- Root Cause Identification -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <span class="text-amber-600">●</span> Suspected Root Cause
+              </div>
+              <p class="text-[10px] text-slate-600">
+                Pinpoints exact degraded element:
+              </p>
+              <div class="bg-white border rounded px-1.5 py-0.5 mt-0.5 flex justify-between items-center text-[10px] font-mono">
+                <span class="text-red-600 font-bold">Link L3 (WB1→WB2)</span>
+                <span class="bg-amber-100 text-amber-800 px-1 rounded text-[9px]">90% Conf</span>
+              </div>
+            </div>
+
+            <!-- Evidence Telemetry Array -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <span class="text-amber-600">●</span> Telemetry Evidence
+              </div>
+              <div class="text-[9px] text-slate-600 space-y-0.5 font-mono">
+                <div>• Loss: 0.5% → <span class="text-red-600 font-semibold">14.0%</span> (+13.5%)</div>
+                <div>• Latency: 25ms → <span class="text-red-600 font-semibold">120ms</span></div>
+                <div>• Throughput: 35 → <span class="text-red-600 font-semibold">8 Mbps</span></div>
+              </div>
+            </div>
+
+            <!-- Cypher Dependency Traversal -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <span class="text-amber-600">●</span> Affected Subscribers
+              </div>
+              <p class="text-[10px] text-slate-600 leading-tight">
+                Graph traversal identifies downstream accounts:
+              </p>
+              <div class="text-[9px] text-slate-700 bg-white p-1 rounded border mt-1">
+                <span class="font-semibold text-slate-900">3 Impacted:</span> Ramesh Patel (Kirana), Gram Panchayat, Health Sub-Centre.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[9px] text-slate-400 text-center font-mono mt-1 border-t pt-1">
+          Cypher Dependency Evaluation
+        </div>
+      </div>
+
+      <!-- Arrow 4 -> 5 -->
+      <div class="col-span-auto flex items-center justify-center -mx-2.5 z-10">
+        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow">
+          ➔
+        </div>
+      </div>
+
+      <!-- COLUMN 5: Sarvam AI & Operations (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-white">
+        <div>
+          <div class="bg-cyan-100 border border-cyan-300 rounded px-2 py-1 text-center font-bold text-xs text-slate-900 mb-2">
+            Operations & Sarvam AI
+          </div>
+
+          <div class="space-y-2">
+            <!-- Sarvam AI 105B Briefing -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-cyan-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                Regional LLM (Sarvam-105B)
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Translates NOC alerts into <span class="font-semibold text-slate-900">7 Indian languages</span> (Hindi, Marathi, Gujarati, etc.) for rural operators.
+              </p>
+            </div>
+
+            <!-- Bulbul Neural TTS Audio -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-cyan-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                Neural Voice (Bulbul v1)
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                Synthesizes realistic vernacular speech (Meera/Shubh) for hands-free tower field dispatch.
+              </p>
+            </div>
+
+            <!-- Village Business Hub: UPI & WhatsApp -->
+            <div class="border border-slate-200 rounded p-1.5 bg-slate-50 text-[11px]">
+              <div class="font-bold text-slate-800 flex items-center gap-1 mb-0.5">
+                <svg class="w-3.5 h-3.5 text-cyan-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Billing & Outage Notice
+              </div>
+              <p class="text-[10px] text-slate-600 leading-snug">
+                BharatPe/BHIM UPI QR collection & automated WhatsApp Hindi subscriber broadcast.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-[9px] text-slate-400 text-center font-mono mt-1 border-t pt-1">
+          Last-Mile Field Execution
+        </div>
+      </div>
+
+      <!-- COLUMN 6: Architecture Overview (Side Summary Card) (Span 2) -->
+      <div class="col-span-2 border-2 border-slate-800 rounded-lg p-2.5 flex flex-col justify-between bg-slate-50 shadow-sm">
+        <div>
+          <div class="border-b-2 border-slate-800 pb-1 mb-2 text-center">
+            <h3 class="font-extrabold text-xs uppercase tracking-wider text-slate-900 font-serif">
+              Architecture Overview
+            </h3>
+          </div>
+
+          <ul class="text-[10px] text-slate-700 space-y-2 leading-relaxed">
+            <li class="flex items-start gap-1.5">
+              <span class="text-blue-700 font-bold text-xs leading-none">•</span>
+              <span><strong class="text-slate-900">Multi-Hop Graph Model:</strong> Maps complex village topology (PtP microwave relays, solar towers, APs) into Neo4j graph store with instant in-memory fallback.</span>
+            </li>
+            <li class="flex items-start gap-1.5">
+              <span class="text-blue-700 font-bold text-xs leading-none">•</span>
+              <span><strong class="text-slate-900">Deterministic Diagnostics:</strong> Normalized composite scoring (loss, latency, throughput, link up/down) with upstream failure suppression.</span>
+            </li>
+            <li class="flex items-start gap-1.5">
+              <span class="text-blue-700 font-bold text-xs leading-none">•</span>
+              <span><strong class="text-slate-900">Subscriber Impact Tracing:</strong> Traverses network dependencies in real time to isolate affected local businesses, schools, and clinics.</span>
+            </li>
+            <li class="flex items-start gap-1.5">
+              <span class="text-blue-700 font-bold text-xs leading-none">•</span>
+              <span><strong class="text-slate-900">Sarvam Regional AI:</strong> Combines <span class="font-mono text-[9px] font-semibold">sarvam-105b</span> and <span class="font-mono text-[9px] font-semibold">Bulbul-v1</span> neural voice in 7 Indian languages for non-technical local operators.</span>
+            </li>
+            <li class="flex items-start gap-1.5">
+              <span class="text-blue-700 font-bold text-xs leading-none">•</span>
+              <span><strong class="text-slate-900">Village Business Hub:</strong> Integrates automated network health with NPCI UPI billing, payment tracking, and WhatsApp dispatch.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="border-t border-slate-300 pt-1 text-[9px] text-slate-500 text-center font-mono">
+          Decoupled, Modular & Scalable
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── BOTTOM TECHNOLOGY STACK BAR ─────────────────────────────────────────── -->
+    <div class="border-2 border-slate-800 rounded-lg p-2.5 bg-white my-1 flex items-center justify-between shadow-sm">
+      <div class="border-r-2 border-slate-800 pr-5 flex items-center">
+        <span class="font-extrabold text-xs uppercase tracking-wider text-slate-900 font-serif">
+          TECHNOLOGY STACK
+        </span>
+      </div>
+
+      <div class="flex-1 grid grid-cols-6 gap-2 px-4 text-center items-center">
+        <!-- Python -->
+        <div class="flex items-center justify-center gap-2 border-r border-slate-200">
+          <svg class="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor"><path d="M11.9 1a6.4 6.4 0 0 0-6.4 6.4v2.1h6.4a2.1 2.1 0 0 1 2.1 2.2v2.1h2.2a4.3 4.3 0 0 0 4.2-4.3V7.4A6.4 6.4 0 0 0 14 1h-2.1zm-2.1 3.2a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2zM12.1 23a6.4 6.4 0 0 0 6.4-6.4v-2.1h-6.4a2.1 2.1 0 0 1-2.1-2.2v-2.1H7.8a4.3 4.3 0 0 0-4.2 4.3v2.1a6.4 6.4 0 0 0 6.4 6.4h2.1zm2.1-3.2a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2z"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">Python 3.14</div>
+            <div class="text-[9px] text-slate-500">Core Engine</div>
+          </div>
+        </div>
+
+        <!-- FastAPI -->
+        <div class="flex items-center justify-center gap-2 border-r border-slate-200">
+          <svg class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.5 4.5l5.5 7h-4.5l1.5 8-7-9.5h4.5l-1.5-5.5z"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">FastAPI</div>
+            <div class="text-[9px] text-slate-500">REST & Lifespan</div>
+          </div>
+        </div>
+
+        <!-- React + Vite -->
+        <div class="flex items-center justify-center gap-2 border-r border-slate-200">
+          <svg class="w-5 h-5 text-cyan-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0-7c-5.523 0-10 3.134-10 7 0 2.227 1.488 4.22 3.824 5.48C4.542 16.666 4 19.167 4 22h2c0-2.387.728-4.547 1.957-6.287C9.277 15.898 10.603 16 12 16s2.723-.102 4.043-.287C17.272 17.453 18 19.613 18 22h2c0-2.833-.542-5.334-1.824-7.52C20.512 13.22 22 11.227 22 9c0-3.866-4.477-7-10-7z"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">React + Vite</div>
+            <div class="text-[9px] text-slate-500">NOC UI & Dashboard</div>
+          </div>
+        </div>
+
+        <!-- Neo4j Aura -->
+        <div class="flex items-center justify-center gap-2 border-r border-slate-200">
+          <svg class="w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">Neo4j Aura</div>
+            <div class="text-[9px] text-slate-500">Graph DB & Cypher</div>
+          </div>
+        </div>
+
+        <!-- SQLite -->
+        <div class="flex items-center justify-center gap-2 border-r border-slate-200">
+          <svg class="w-5 h-5 text-indigo-700" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v4H4V4zm0 6h16v4H4v-4zm0 6h16v4H4v-4z"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">SQLite 3</div>
+            <div class="text-[9px] text-slate-500">Subscribers & Billing</div>
+          </div>
+        </div>
+
+        <!-- Sarvam AI -->
+        <div class="flex items-center justify-center gap-2">
+          <svg class="w-5 h-5 text-orange-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <div class="text-left leading-none">
+            <div class="font-bold text-xs text-slate-900">Sarvam AI</div>
+            <div class="text-[9px] text-slate-500">105B LLM & Bulbul TTS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BOTTOM IDENTIFIER BAR (NAVY FOOTER) ─────────────────────────────────── -->
+    <footer class="bg-slate-950 text-white px-5 py-2 rounded-b-md flex items-center justify-between text-xs tracking-wider">
+      <div class="font-extrabold tracking-widest text-slate-100 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+        TEAM ID: 138984 &nbsp;|&nbsp; HOPTRACE · RURAL ISP INTELLIGENCE
+      </div>
+      <div class="text-slate-400 font-mono text-[11px]">
+        SMART INDIA HACKATHON 2026 · PROBLEM STATEMENT T3.2
+      </div>
+      <div class="font-extrabold text-slate-200">
+        3
+      </div>
+    </footer>
+
+  </div>
+
+</body>
+</html>
