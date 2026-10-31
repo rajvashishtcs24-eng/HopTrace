@@ -17,17 +17,17 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Dict, List, Optional
-from backend.app.engine.diagnostics import DiagnosticEngine
-from backend.app.engine.graph_store import InMemoryGraphStore, Neo4jGraphStore
-from backend.app.engine.models import (
+from .diagnostics import DiagnosticEngine
+from .graph_store import InMemoryGraphStore, Neo4jGraphStore
+from .models import (
     AffectedSubscribersResponse,
     IncidentDetails,
     NetworkTopology,
     RunMeasurementsResponse,
     ScenarioRunResponse,
 )
-from backend.app.engine.neo4j_client import get_neo4j_client
-from backend.app.engine.telemetry import SimulatedTelemetryGenerator
+from .neo4j_client import get_neo4j_client
+from .telemetry import SimulatedTelemetryGenerator
 
 
 class HopTraceEngine:

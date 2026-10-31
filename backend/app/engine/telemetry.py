@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from backend.app.engine.models import Measurement
+from .models import Measurement
 
 
 # Documented baseline metrics per link

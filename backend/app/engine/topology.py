@@ -27,7 +27,7 @@ unless explicitly represented in the graph.
 from __future__ import annotations
 
 from typing import Dict, List, Optional
-from backend.app.engine.models import (
+from .models import (
     NetworkTopology,
     TopologyLink,
     TopologyNode,

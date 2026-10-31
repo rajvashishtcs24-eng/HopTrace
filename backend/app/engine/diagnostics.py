@@ -41,13 +41,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from backend.app.engine.models import (
+from .models import (
     EvidenceItem,
     IncidentDetails,
     Measurement,
     NetworkTopology,
 )
-from backend.app.engine.telemetry import BASELINE_TELEMETRY, GATEWAY_LINK_ID, INTERIOR_LINK_IDS
+from .telemetry import BASELINE_TELEMETRY, GATEWAY_LINK_ID, INTERIOR_LINK_IDS
 
 
 class LinkAnomalyReport:
