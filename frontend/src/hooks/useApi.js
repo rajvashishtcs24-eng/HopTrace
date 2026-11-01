@@ -111,12 +111,18 @@ export function useApi() {
   }, [store]);
 
   const synthesizeAudio = useCallback(async (text, languageCode, speaker, apiKey) => {
-    const result = await api(`/incidents/audio/synthesize`, {
-      method: 'POST',
-      body: JSON.stringify({ text, language_code: languageCode, speaker, api_key: apiKey || undefined }),
-    }).catch(() => null);
-    return result?.audio_base64 || null;
-  }, []);
+    try {
+      const result = await api('/explanations/audio', {
+        method: 'POST',
+        body: JSON.stringify({ text, language_code: languageCode, speaker, api_key: apiKey || undefined }),
+      });
+      return result?.audio_base64 || null;
+    } catch (err) {
+      console.warn('Audio synthesis failed:', err);
+      store.addToast(`Audio synthesis failed: ${err.message}`, 'error');
+      return null;
+    }
+  }, [store]);
 
   const sendReminder = useCallback(async (subscriberId, language = 'hi') => {
     const result = await api(`/subscribers/${subscriberId}/remind`, {
