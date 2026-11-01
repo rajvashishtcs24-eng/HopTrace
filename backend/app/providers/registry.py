@@ -38,7 +38,7 @@ def get_topology_provider() -> TopologyProvider:
         return SimulatedTopologyProvider()
 
     if name == "engine":
-        from app.engine.facade import EngineTopologyProvider
+        from app.providers.engine_topology import EngineTopologyProvider
 
         return EngineTopologyProvider()
 
