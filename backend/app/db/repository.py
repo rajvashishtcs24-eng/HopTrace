@@ -211,3 +211,15 @@ def create_incident(conn: sqlite3.Connection, incident_data: dict[str, Any]) -> 
     )
     conn.commit()
     return get_incident(conn, incident_data["id"])  # type: ignore[return-value]
+
+
+def close_open_incidents(conn: sqlite3.Connection) -> None:
+    """Mark all open incidents in SQLite as closed."""
+    conn.execute(
+        """
+        UPDATE incidents
+        SET status = 'closed'
+        WHERE status = 'open';
+        """
+    )
+    conn.commit()

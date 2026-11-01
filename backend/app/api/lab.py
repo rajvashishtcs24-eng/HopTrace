@@ -131,6 +131,13 @@ def run_lab_scenario(
                     })
                 except Exception:
                     pass  # Non-critical persistence failure
+    else:
+        # A baseline run (or any run yielding no open incident) closes open incidents in the database
+        try:
+            from app.db.repository import close_open_incidents
+            close_open_incidents(db)
+        except Exception:
+            pass
 
     # 5. Get affected subscribers
     affected_subs = []

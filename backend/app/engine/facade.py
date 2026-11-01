@@ -134,6 +134,9 @@ class HopTraceEngine:
             incident_id = incident.id
             self._incidents[incident.id] = incident
             self._incident_order.append(incident.id)
+        else:
+            # Baseline or any run that yields no open incident clears active faults
+            self.close_open_incidents()
 
         return ScenarioRunResponse(
             run_id=run_id,
@@ -141,6 +144,24 @@ class HopTraceEngine:
             measurements_count=len(measurements),
             incident_id=incident_id,
         )
+
+    def close_open_incidents(self) -> List[str]:
+        """Marks all currently open incidents in the engine store as closed."""
+        closed_ids = []
+        for inc_id in self._incident_order:
+            inc = self._incidents.get(inc_id)
+            if inc and inc.status == "open":
+                inc.status = "closed"
+                closed_ids.append(inc_id)
+        return closed_ids
+
+    def get_latest_open_incident(self) -> Optional[IncidentDetails]:
+        """Returns the most recent incident with status == 'open', or None."""
+        for inc_id in reversed(self._incident_order):
+            inc = self._incidents.get(inc_id)
+            if inc and inc.status == "open":
+                return inc
+        return None
 
     def get_incident_details(self, incident_id: str) -> Optional[IncidentDetails]:
         """Retrieves incident details by ID."""
@@ -225,6 +246,14 @@ def get_incident_details(incident_id: str) -> Optional[IncidentDetails]:
 
 def get_latest_incident() -> Optional[IncidentDetails]:
     return get_engine().get_latest_incident()
+
+
+def get_latest_open_incident() -> Optional[IncidentDetails]:
+    return get_engine().get_latest_open_incident()
+
+
+def close_open_incidents() -> List[str]:
+    return get_engine().close_open_incidents()
 
 
 def get_affected_subscribers(

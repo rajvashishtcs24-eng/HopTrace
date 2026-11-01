@@ -91,7 +91,7 @@ async def _streaming_loop() -> None:
             measurements = engine.telemetry_generator.generate_baseline_with_noise()
 
             # If there is an active injected incident, overlay its measurements
-            latest = engine.get_latest_incident()
+            latest = engine.get_latest_open_incident()
             injected_measurements = None
             if latest and latest.status == "open" and latest.suspected_component_id:
                 # Fetch the run measurements that triggered this incident
@@ -207,7 +207,7 @@ async def telemetry_websocket(websocket: WebSocket) -> None:
     ts_store = get_time_series_store()
     try:
         risk_snapshot = ts_store.get_risk_snapshot()
-        latest = engine.get_latest_incident()
+        latest = engine.get_latest_open_incident()
         incident_payload = None
         if latest and latest.status == "open":
             incident_payload = {

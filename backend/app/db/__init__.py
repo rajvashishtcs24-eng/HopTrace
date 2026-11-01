@@ -5,6 +5,7 @@ from app.db.connection import get_db, get_db_connection
 from app.db.init import DEMO_INCIDENTS, DEMO_SUBSCRIBERS, init_db
 from app.db.repository import (
     create_incident,
+    close_open_incidents,
     get_incident,
     get_latest_incident,
     get_reminders_for_subscriber,
@@ -28,4 +29,5 @@ __all__ = [
     "get_latest_incident",
     "get_incident",
     "create_incident",
+    "close_open_incidents",
 ]
