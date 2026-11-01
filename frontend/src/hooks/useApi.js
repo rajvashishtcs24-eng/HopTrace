@@ -42,7 +42,13 @@ export function useApi() {
       const inc = await api('/incidents/latest').catch(() => null);
       if (inc && inc.id) {
         store.setActiveIncident(inc);
-        store.setAffectedSubscribers(inc.affected_subscribers || []);
+        try {
+          const aff = await api(`/incidents/${inc.id}/affected-subscribers`);
+          store.setAffectedSubscribers(aff?.subscribers || []);
+        } catch (affErr) {
+          console.warn('Failed to load affected subscribers:', affErr);
+          store.setAffectedSubscribers([]);
+        }
       } else {
         store.setActiveIncident(null);
         store.setAffectedSubscribers([]);
