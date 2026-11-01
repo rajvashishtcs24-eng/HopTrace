@@ -29,10 +29,13 @@ export function useLiveTelemetry() {
           try {
             const msg = JSON.parse(evt.data);
             if (msg.type === 'telemetry_batch') {
-              setLiveTelemetry(msg.payload);
+              setLiveTelemetry(msg);
+              if (msg.measurements) {
+                setRiskSnapshot(msg.measurements);
+              }
             } else if (msg.type === 'connected') {
-              if (msg.payload?.risk_snapshot) {
-                setRiskSnapshot(msg.payload.risk_snapshot);
+              if (msg.risk_snapshot) {
+                setRiskSnapshot(msg.risk_snapshot);
               }
             }
           } catch (e) {
