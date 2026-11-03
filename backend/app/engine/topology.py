@@ -76,6 +76,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid Mains 230V",
                 "batteryVoltage": 52.8,
                 "solarAmps": 0.0,
+                "lat": 27.20000,  # illustrative placement, not surveyed
+                "lon": 80.57877,
             },
         ),
         # ── Core Router ──────────────────────────────────────────────────────
@@ -91,6 +93,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid + 48V UPS",
                 "batteryVoltage": 51.4,
                 "solarAmps": 0.0,
+                "lat": 27.20000,  # illustrative placement, not surveyed
+                "lon": 80.60000,
             },
         ),
         # ── Village 1 — Rampur Wireless Bridges ──────────────────────────────
@@ -106,6 +110,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Solar + 12V LiFePO4",
                 "batteryVoltage": 12.8,
                 "solarAmps": 5.2,
+                "lat": 27.20045,  # illustrative placement, not surveyed
+                "lon": 80.60000,
             },
         ),
         TopologyNode(
@@ -120,6 +126,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Solar + 12V LiFePO4",
                 "batteryVoltage": 12.5,
                 "solarAmps": 4.6,
+                "lat": 27.22879,  # illustrative placement, not surveyed
+                "lon": 80.60562,
             },
         ),
         # ── Village 1 — Rampur Access Points ─────────────────────────────────
@@ -134,6 +142,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "coverage_radius_m": 300,
                 "powerSource": "PoE 24V Switch",
                 "batteryVoltage": 24.0,
+                "lat": 27.22906,  # illustrative placement, not surveyed
+                "lon": 80.60602,
             },
         ),
         TopologyNode(
@@ -147,6 +157,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "coverage_radius_m": 250,
                 "powerSource": "PoE 24V Switch",
                 "batteryVoltage": 24.0,
+                "lat": 27.20000,  # illustrative placement, not surveyed
+                "lon": 80.59949,
             },
         ),
         # ── Village 2 — Bhatpur Wireless Bridges ─────────────────────────────
@@ -162,6 +174,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid + PoE",
                 "batteryVoltage": 24.0,
                 "solarAmps": 0.0,
+                "lat": 27.20000,  # illustrative placement, not surveyed
+                "lon": 80.60051,
             },
         ),
         TopologyNode(
@@ -176,6 +190,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Solar + 12V LiFePO4",
                 "batteryVoltage": 12.6,
                 "solarAmps": 6.1,
+                "lat": 27.20652,  # illustrative placement, not surveyed
+                "lon": 80.62785,
             },
         ),
         TopologyNode(
@@ -190,6 +206,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid + UPS",
                 "batteryVoltage": 48.0,
                 "solarAmps": 0.0,
+                "lat": 27.20652,  # illustrative placement, not surveyed
+                "lon": 80.62836,
             },
         ),
         # ── Village 2 — Bhatpur Access Points ────────────────────────────────
@@ -204,6 +222,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "coverage_radius_m": 280,
                 "powerSource": "PoE 24V Switch",
                 "batteryVoltage": 24.0,
+                "lat": 27.20697,  # illustrative placement, not surveyed
+                "lon": 80.62836,
             },
         ),
         TopologyNode(
@@ -217,6 +237,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "coverage_radius_m": 200,
                 "powerSource": "PoE 24V Switch",
                 "batteryVoltage": 24.0,
+                "lat": 27.20607,  # illustrative placement, not surveyed
+                "lon": 80.62836,
             },
         ),
         # ── Village 3 — Daulatpur Wireless Bridges ────────────────────────────
@@ -232,6 +254,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid + PoE",
                 "batteryVoltage": 24.0,
                 "solarAmps": 0.0,
+                "lat": 27.19955,  # illustrative placement, not surveyed
+                "lon": 80.60000,
             },
         ),
         TopologyNode(
@@ -246,6 +270,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Solar + 12V LiFePO4",
                 "batteryVoltage": 12.3,
                 "solarAmps": 4.9,
+                "lat": 27.17130,  # illustrative placement, not surveyed
+                "lon": 80.62665,
             },
         ),
         # ── Village 3 — Daulatpur Access Points ──────────────────────────────
@@ -260,6 +286,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "coverage_radius_m": 320,
                 "powerSource": "PoE 24V Switch",
                 "batteryVoltage": 24.0,
+                "lat": 27.17130,  # illustrative placement, not surveyed
+                "lon": 80.62715,
             },
         ),
         TopologyNode(
@@ -274,6 +302,8 @@ def get_default_nodes() -> List[TopologyNode]:
                 "powerSource": "Grid + UPS",
                 "batteryVoltage": 48.0,
                 "solarAmps": 0.0,
+                "lat": 27.17085,  # illustrative placement, not surveyed
+                "lon": 80.62665,
             },
         ),
     ]
