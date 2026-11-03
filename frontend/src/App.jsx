@@ -5,7 +5,7 @@ import { useApi } from './hooks/useApi';
 
 import TopBar from './components/TopBar';
 import KPIRibbon from './components/KPIRibbon';
-import TopologyCanvas from './components/TopologyCanvas';
+import NetworkView from './components/NetworkView';
 import IncidentPanel from './components/IncidentPanel';
 import AIExplanationCard from './components/AIExplanationCard';
 import TelemetryCharts from './components/TelemetryCharts';
@@ -52,7 +52,7 @@ export default function App() {
                 <span className="text-slate-500 text-xs">— 15 nodes · 3 villages · Real-time risk heatmap</span>
               </div>
               <div className="flex-1 min-h-0">
-                <TopologyCanvas />
+                <NetworkView />
               </div>
             </div>
           </div>

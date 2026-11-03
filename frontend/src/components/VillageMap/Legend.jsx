@@ -1,0 +1,108 @@
+import { useState } from 'react';
+import { NODE_TYPES_META } from './theme';
+
+/**
+ * Collapsible map legend displaying node types, risk tiers, link styles,
+ * and operational overlays.
+ * Theme tokens cited from TopologyCanvas (commit f46157e).
+ */
+export default function Legend() {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <aside
+      aria-label="Map legend"
+      className="absolute bottom-6 left-3 z-[1000] bg-[#0b172a]/95 backdrop-blur-sm border border-slate-700/70 rounded-md shadow-xl text-xs text-slate-300 w-64 max-h-[85vh] overflow-y-auto"
+    >
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/60 bg-slate-800/40">
+        <span className="font-semibold text-slate-200">Map Legend</span>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="text-slate-400 hover:text-slate-200 text-xs px-1.5 py-0.5 rounded hover:bg-slate-700/50 transition-colors"
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Collapse legend' : 'Expand legend'}
+        >
+          {isOpen ? 'Hide ▲' : 'Show ▼'}
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="p-3 space-y-3">
+          {/* Node Types */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Node Types
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {Object.entries(NODE_TYPES_META).map(([key, meta]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: meta.color }}
+                  />
+                  <span className="text-[11px] text-slate-200">{meta.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Risk Levels */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Risk Scale
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#10b981] shrink-0" />
+                <span className="text-[11px]">&lt; 40 Normal</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#f59e0b] shrink-0" />
+                <span className="text-[11px]">40–59 Med</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#f97316] shrink-0" />
+                <span className="text-[11px]">60–79 High</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#ef4444] shrink-0" />
+                <span className="text-[11px]">≥ 80 Critical</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Links & Overlays */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Links & Overlays
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 bg-sky-400 inline-block" />
+                <span className="text-[11px]">Solid: Healthy link</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-t border-dashed border-red-500 inline-block" />
+                <span className="text-[11px]">Dashed: High risk link</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full border border-emerald-400/80 bg-emerald-500/20 inline-block" />
+                <span className="text-[11px]">AP coverage radius</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full border border-red-500/80 bg-red-500/30 inline-block" />
+                <span className="text-[11px]">Suspected component / blast</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Placement Notice */}
+          <div className="pt-2 border-t border-slate-700/50 text-[10px] text-slate-400 leading-tight">
+            Illustrative placement, not surveyed.
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
