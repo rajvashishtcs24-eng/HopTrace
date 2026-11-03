@@ -17,14 +17,21 @@ const useStore = create((set, get) => ({
   networkStatus: 'healthy',   // healthy | degraded | critical
   cascadeDetected: false,
   flappingLinks: [],
-  setLiveTelemetry: (payload) => set({
-    liveMeasurements: payload.measurements || [],
-    lastTick: payload.tick || 0,
-    networkStatus: payload.network_status || 'healthy',
-    cascadeDetected: payload.cascade_detected || false,
-    flappingLinks: payload.flapping_links || [],
-    activeIncident: payload.active_incident || get().activeIncident,
-  }),
+  setLiveTelemetry: (payload) => {
+    const hasActiveIncident = 'active_incident' in payload;
+    const nextActiveIncident = hasActiveIncident ? payload.active_incident : get().activeIncident;
+    const shouldClearAffected = hasActiveIncident && payload.active_incident === null;
+
+    set({
+      liveMeasurements: payload.measurements || [],
+      lastTick: payload.tick || 0,
+      networkStatus: payload.network_status || 'healthy',
+      cascadeDetected: payload.cascade_detected || false,
+      flappingLinks: payload.flapping_links || [],
+      activeIncident: nextActiveIncident,
+      ...(shouldClearAffected ? { affectedSubscribers: [] } : {}),
+    });
+  },
 
   // ── Risk snapshot ───────────────────────────────────────────────────────
   riskSnapshot: {},   // { link_id -> risk_score }
