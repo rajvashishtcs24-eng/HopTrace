@@ -3,9 +3,10 @@ import { MapContainer, TileLayer, ScaleControl, useMap } from 'react-leaflet';
 import useStore from '../../store/appStore';
 import './leafletSetup';
 import { computeBounds } from './geo';
+import { telemetryLabel } from './theme';
 import Legend from './Legend';
 
-const TRANSPARENT_PIXEL =
+const ERROR_TILE_URL =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /**
@@ -55,10 +56,14 @@ export default function VillageMap() {
   const dataSource = topology?.data_source ?? 'unknown';
 
   const [isOffline, setIsOffline] = useState(false);
+  const tileLayerRef = useRef(null);
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
-    const handleOnline = () => setIsOffline(false);
+    const handleOnline = () => {
+      setIsOffline(false);
+      tileLayerRef.current?.redraw();
+    };
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
     return () => {
@@ -95,23 +100,29 @@ export default function VillageMap() {
     (bounds[0][1] + bounds[1][1]) / 2,
   ];
 
+  const label = telemetryLabel(dataSource);
+
   return (
     <div className="relative isolate w-full h-full min-h-[480px] bg-[#050d1a] overflow-hidden select-none">
       {/* Honesty Chip */}
       <div
         role="note"
         aria-label="Telemetry data source"
-        className="absolute top-3 right-3 z-[1000] bg-slate-900/90 backdrop-blur-sm border border-slate-700/70 text-slate-300 text-xs px-2.5 py-1.5 rounded shadow pointer-events-none flex items-center gap-2"
+        className="absolute top-3 right-3 z-[1000] bg-slate-900/90 backdrop-blur-sm border border-slate-700/70 text-slate-300 text-[11px] sm:text-xs px-2.5 py-1.5 rounded shadow pointer-events-none flex items-center gap-2 max-w-[calc(100%-1rem)] sm:max-w-max leading-tight"
       >
         <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-        <span>Simulated telemetry · illustrative placement · source: {dataSource}</span>
+        <span>
+          {label
+            ? `${label} · illustrative placement · source: ${dataSource}`
+            : `illustrative placement · source: ${dataSource}`}
+        </span>
       </div>
 
       {/* Offline Status Chip */}
       {isOffline && (
         <div
           role="status"
-          className="absolute top-3 left-14 z-[1000] bg-amber-950/90 backdrop-blur-sm border border-amber-600/70 text-amber-200 text-xs px-2.5 py-1.5 rounded shadow pointer-events-none flex items-center gap-1.5"
+          className="absolute top-20 left-3 z-[1000] bg-amber-950/90 backdrop-blur-sm border border-amber-600/70 text-amber-200 text-xs px-2.5 py-1.5 rounded shadow pointer-events-none flex items-center gap-1.5"
         >
           <span className="text-amber-400 font-bold">⚠</span>
           <span>Basemap offline: showing network only</span>
@@ -130,13 +141,20 @@ export default function VillageMap() {
         style={{ background: '#050d1a' }}
       >
         <TileLayer
+          ref={tileLayerRef}
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           subdomains="abcd"
           maxZoom={19}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          errorTileUrl={TRANSPARENT_PIXEL}
+          errorTileUrl={ERROR_TILE_URL}
           eventHandlers={{
             tileerror: () => setIsOffline(true),
+            tileload: (e) => {
+              const src = e?.tile?.src;
+              if (src && src !== ERROR_TILE_URL) {
+                setIsOffline(false);
+              }
+            },
           }}
         />
 

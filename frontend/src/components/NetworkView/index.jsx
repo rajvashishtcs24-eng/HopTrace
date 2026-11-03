@@ -1,14 +1,42 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import VillageMap from '../VillageMap';
 import TopologyCanvas from '../TopologyCanvas';
 import { getViewPref, setViewPref } from './viewPref';
 
 export default function NetworkView() {
   const [view, setView] = useState(getViewPref);
+  const mapRef = useRef(null);
+  const graphRef = useRef(null);
 
   const handleViewChange = (newView) => {
     setView(newView);
     setViewPref(newView);
+  };
+
+  const handleKeyDown = (e) => {
+    let nextView = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextView = view === 'map' ? 'graph' : 'map';
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextView = view === 'graph' ? 'map' : 'graph';
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextView = 'map';
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextView = 'graph';
+    }
+
+    if (nextView && nextView !== view) {
+      handleViewChange(nextView);
+      if (nextView === 'map') {
+        mapRef.current?.focus();
+      } else {
+        graphRef.current?.focus();
+      }
+    }
   };
 
   return (
@@ -18,11 +46,14 @@ export default function NetworkView() {
         <div
           role="radiogroup"
           aria-label="Network visualization view"
+          onKeyDown={handleKeyDown}
           className="inline-flex rounded-lg bg-slate-900/90 p-0.5 border border-slate-800"
         >
           <button
+            ref={mapRef}
             type="button"
             role="radio"
+            tabIndex={view === 'map' ? 0 : -1}
             aria-checked={view === 'map'}
             onClick={() => handleViewChange('map')}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
@@ -35,8 +66,10 @@ export default function NetworkView() {
             <span>Map</span>
           </button>
           <button
+            ref={graphRef}
             type="button"
             role="radio"
+            tabIndex={view === 'graph' ? 0 : -1}
             aria-checked={view === 'graph'}
             onClick={() => handleViewChange('graph')}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${

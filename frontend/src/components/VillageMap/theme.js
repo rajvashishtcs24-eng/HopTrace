@@ -27,3 +27,19 @@ export function riskColor(score) {
   if (score >= 40) return '#f59e0b';
   return '#10b981';
 }
+
+/**
+ * Returns human-readable telemetry label corresponding to backend DataSource string.
+ * Returns "Simulated telemetry" for 'simulated',
+ * "Measured telemetry" for 'measured',
+ * and null for anything else (e.g. 'loading' or null).
+ *
+ * @param {string | null | undefined} dataSource
+ * @returns {string | null}
+ */
+export function telemetryLabel(dataSource) {
+  if (dataSource === 'simulated') return 'Simulated telemetry';
+  if (dataSource === 'measured') return 'Measured telemetry';
+  return null;
+}
+

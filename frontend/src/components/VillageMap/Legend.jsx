@@ -7,12 +7,17 @@ import { NODE_TYPES_META } from './theme';
  * Theme tokens cited from TopologyCanvas (commit f46157e).
  */
 export default function Legend() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      return window.matchMedia('(min-width: 640px)').matches;
+    }
+    return true;
+  });
 
   return (
     <aside
       aria-label="Map legend"
-      className="absolute bottom-6 left-3 z-[1000] bg-[#0b172a]/95 backdrop-blur-sm border border-slate-700/70 rounded-md shadow-xl text-xs text-slate-300 w-64 max-h-[85vh] overflow-y-auto"
+      className="absolute bottom-6 left-3 z-[1000] bg-[#0b172a]/95 backdrop-blur-sm border border-slate-700/70 rounded-md shadow-xl text-xs text-slate-300 w-64 max-h-[60vh] sm:max-h-[85vh] overflow-y-auto"
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/60 bg-slate-800/40">
         <span className="font-semibold text-slate-200">Map Legend</span>
