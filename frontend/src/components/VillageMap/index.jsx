@@ -1,10 +1,27 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, ScaleControl, useMap } from 'react-leaflet';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import {
+  MapContainer,
+  TileLayer,
+  ScaleControl,
+  Circle,
+  Polyline,
+  Marker,
+  Popup,
+  Tooltip,
+  useMap,
+} from 'react-leaflet';
+import L from 'leaflet';
 import useStore from '../../store/appStore';
 import './leafletSetup';
 import { computeBounds } from './geo';
-import { telemetryLabel } from './theme';
+import { telemetryLabel, riskColor, villageStatusColor } from './theme';
+import { getLinkStrokeWidth, getLinkDashArray } from './risk';
+import { buildMapModel } from './model';
+import { createNodeIcon, createSuspectedRingIcon, NODE_Z_INDEX } from './icons';
+import { getStoredLayers, setStoredLayers, LABEL_MIN_ZOOM } from './layerPrefs';
 import Legend from './Legend';
+import MapPanes from './MapPanes';
+import LayerToggles from './LayerToggles';
 
 const ERROR_TILE_URL =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -50,13 +67,70 @@ function FitBoundsOnce({ bounds }) {
   return null;
 }
 
+/**
+ * Tracks current Leaflet map zoom level and informs parent state.
+ */
+function ZoomTracker({ onZoomChange }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const handleZoom = () => {
+      onZoomChange(map.getZoom());
+    };
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, onZoomChange]);
+
+  return null;
+}
+
 export default function VillageMap() {
   const topology = useStore((s) => s.topology);
+  const villages = useStore((s) => s.villages);
+  const riskSnapshot = useStore((s) => s.riskSnapshot);
+  const liveMeasurements = useStore((s) => s.liveMeasurements);
+  const activeIncident = useStore((s) => s.activeIncident);
+  const affectedSubscribers = useStore((s) => s.affectedSubscribers);
+  const setSelectedElement = useStore((s) => s.setSelectedElement);
+
+  const model = useMemo(
+    () =>
+      buildMapModel({
+        topology,
+        villages,
+        riskSnapshot,
+        liveMeasurements,
+        activeIncident,
+        affectedSubscribers,
+      }),
+    [
+      topology,
+      villages,
+      riskSnapshot,
+      liveMeasurements,
+      activeIncident,
+      affectedSubscribers,
+    ]
+  );
+
   const bounds = useMemo(() => computeBounds(topology?.nodes), [topology?.nodes]);
   const dataSource = topology?.data_source ?? 'unknown';
 
   const [isOffline, setIsOffline] = useState(false);
+  const [layers, setLayers] = useState(() => getStoredLayers());
+  const [currentZoom, setCurrentZoom] = useState(12);
   const tileLayerRef = useRef(null);
+
+  const handleLayersChange = useCallback((newLayers) => {
+    setLayers(newLayers);
+    setStoredLayers(newLayers);
+  }, []);
+
+  const handleZoomChange = useCallback((z) => {
+    setCurrentZoom(z);
+  }, []);
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
@@ -118,6 +192,13 @@ export default function VillageMap() {
         </span>
       </div>
 
+      {/* Layer Toggles */}
+      <LayerToggles
+        layers={layers}
+        onChange={handleLayersChange}
+        currentZoom={currentZoom}
+      />
+
       {/* Offline Status Chip */}
       {isOffline && (
         <div
@@ -140,6 +221,9 @@ export default function VillageMap() {
         className="w-full h-full z-0"
         style={{ background: '#050d1a' }}
       >
+        <MapPanes />
+        <ZoomTracker onZoomChange={handleZoomChange} />
+
         <TileLayer
           ref={tileLayerRef}
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -161,6 +245,273 @@ export default function VillageMap() {
         <ScaleControl position="bottomright" imperial={false} />
         <MapResizer />
         <FitBoundsOnce bounds={bounds} />
+
+        {/* Coverage Circles Layer */}
+        {layers.coverage &&
+          model.nodes
+            .filter((node) => node.type === 'access_point')
+            .map((node) => {
+              const radius = node.coverage_radius_m || 800;
+              const isBlast = node.isBlastAp;
+              const vColor = villageStatusColor(node.villageStatus);
+              return (
+                <Circle
+                  key={`coverage-${node.id}-${isBlast ? 'blast' : node.villageStatus}`}
+                  center={[node.lat, node.lon]}
+                  radius={radius}
+                  pane="coveragePane"
+                  interactive={false}
+                  pathOptions={
+                    isBlast
+                      ? {
+                          color: '#ef4444',
+                          fillColor: '#ef4444',
+                          fillOpacity: 0.28,
+                          weight: 3,
+                          dashArray: '4 4',
+                        }
+                      : {
+                          color: vColor,
+                          fillColor: vColor,
+                          fillOpacity: 0.14,
+                          weight: 1.5,
+                        }
+                  }
+                />
+              );
+            })}
+
+        {/* Links Layer */}
+        {layers.links &&
+          model.links.map((link) => {
+            const p1 = [link.sourceNode.lat, link.sourceNode.lon];
+            const p2 = [link.targetNode.lat, link.targetNode.lon];
+            const strokeCol = link.isSuspected
+              ? '#ef4444'
+              : riskColor(link.risk_score);
+            const strokeW = getLinkStrokeWidth(link.risk_score, link.isSuspected);
+            const strokeDash = getLinkDashArray(link.live?.connectivity_ok);
+
+            return (
+              <Polyline
+                key={`link-${link.id}-${link.isSuspected}-${link.isDown}-${Math.round(link.risk_score)}`}
+                positions={[p1, p2]}
+                pane="linksPane"
+                pathOptions={{
+                  color: strokeCol,
+                  weight: strokeW,
+                  dashArray: strokeDash,
+                }}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedElement({
+                      type: 'edge',
+                      id: link.id,
+                      data: {
+                        id: link.id,
+                        source: link.source,
+                        target: link.target,
+                        risk_score: link.risk_score,
+                        distance_km: link.distance_km,
+                        medium: link.medium,
+                        frequency: link.frequency,
+                        status: link.isDown ? 'down' : 'up',
+                      },
+                    });
+                  },
+                }}
+              >
+                <Popup className="hoptrace-popup">
+                  <div className="space-y-1.5 text-xs text-slate-200">
+                    <div className="flex items-center justify-between border-b border-slate-700/60 pb-1">
+                      <span className="font-semibold text-white">Link: {link.id}</span>
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        style={{
+                          backgroundColor: `${riskColor(link.risk_score)}22`,
+                          color: riskColor(link.risk_score),
+                        }}
+                      >
+                        Risk {link.risk_score}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {link.source} &rarr; {link.target}
+                    </div>
+                    {link.distance_km !== undefined && (
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-400">Distance:</span>
+                        <span className="font-mono">{link.distance_km} km</span>
+                      </div>
+                    )}
+                    {link.live && (
+                      <>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-400">Latency:</span>
+                          <span className="font-mono">
+                            {(link.live.latency_ms || 0).toFixed(1)} ms
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-400">Packet Loss:</span>
+                          <span className="font-mono">
+                            {(link.live.packet_loss_pct || 0).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-400">Throughput:</span>
+                          <span className="font-mono">
+                            {(link.live.throughput_mbps || 0).toFixed(1)} Mbps
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {link.isSuspected && (
+                      <div className="pt-1 text-[11px] text-red-400 font-semibold flex items-center gap-1">
+                        <span>⚠</span> Suspected root cause link
+                      </div>
+                    )}
+                    <div className="pt-1 border-t border-slate-700/60 text-[10px] text-slate-400">
+                      {label || 'Telemetry'} · source: {dataSource}
+                    </div>
+                  </div>
+                </Popup>
+              </Polyline>
+            );
+          })}
+
+        {/* Suspected Link Overlay */}
+        {layers.links &&
+          model.suspected?.type === 'link' &&
+          (() => {
+            const suspectedLink = model.links.find(
+              (l) => l.id === model.suspected.id
+            );
+            if (!suspectedLink) return null;
+            return (
+              <Polyline
+                key={`suspected-${suspectedLink.id}`}
+                positions={[
+                  [suspectedLink.sourceNode.lat, suspectedLink.sourceNode.lon],
+                  [suspectedLink.targetNode.lat, suspectedLink.targetNode.lon],
+                ]}
+                pane="incidentRingPane"
+                pathOptions={{
+                  color: '#ef4444',
+                  weight: 6,
+                  className: 'hoptrace-suspected-link',
+                }}
+                interactive={false}
+              />
+            );
+          })()}
+
+        {/* Nodes Layer */}
+        {model.nodes.map((node) => {
+          const zIndex = node.isSuspected
+            ? NODE_Z_INDEX.suspected
+            : NODE_Z_INDEX[node.type] || 100;
+          const icon = createNodeIcon(node, L);
+
+          return (
+            <Marker
+              key={`node-${node.id}-${node.isSuspected}-${node.isBlastAp}`}
+              position={[node.lat, node.lon]}
+              icon={icon}
+              pane="nodesPane"
+              zIndexOffset={zIndex}
+              title={`${node.id} (${node.label || node.id})`}
+              alt={`${node.id} ${node.type}`}
+              eventHandlers={{
+                click: () => {
+                  setSelectedElement({
+                    type: 'node',
+                    id: node.id,
+                    data: {
+                      id: node.id,
+                      label: node.label || node.id,
+                      nodeType: node.type,
+                      status: node.status || 'healthy',
+                      village: node.village,
+                      isSuspected: node.isSuspected,
+                    },
+                  });
+                },
+              }}
+            >
+              <Popup className="hoptrace-popup">
+                <div className="space-y-1.5 text-xs text-slate-200">
+                  <div className="flex items-center justify-between border-b border-slate-700/60 pb-1">
+                    <span className="font-semibold text-white">Node: {node.id}</span>
+                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                      {node.type}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Village:{' '}
+                    <span className="text-slate-200 font-medium">
+                      {node.village || 'None'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Village Status:{' '}
+                    <span className="text-slate-200 font-medium capitalize">
+                      {node.villageStatus || 'unknown'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-400">
+                    {node.lat.toFixed(5)}° N, {node.lon.toFixed(5)}° E
+                  </div>
+                  {node.isSuspected && (
+                    <div className="pt-1 text-[11px] text-red-400 font-semibold flex items-center gap-1">
+                      <span>⚠</span> Suspected root cause component
+                    </div>
+                  )}
+                  {node.isBlastAp && (
+                    <div className="pt-1 text-[11px] text-amber-400 font-medium flex items-center gap-1">
+                      <span>⚡</span> Blast radius AP (affected subscribers)
+                    </div>
+                  )}
+                  <div className="pt-1 border-t border-slate-700/60 text-[10px] text-slate-400">
+                    {label || 'Telemetry'} · source: {dataSource}
+                  </div>
+                </div>
+              </Popup>
+
+              {layers.labels && currentZoom >= LABEL_MIN_ZOOM && (
+                <Tooltip
+                  permanent
+                  direction="top"
+                  offset={[0, -14]}
+                  className="hoptrace-node-tooltip"
+                  pane="tooltipsPane"
+                >
+                  {node.label || node.id}
+                </Tooltip>
+              )}
+            </Marker>
+          );
+        })}
+
+        {/* Suspected Node Ring Overlay */}
+        {model.suspected?.type === 'node' &&
+          (() => {
+            const suspectedNode = model.nodes.find(
+              (n) => n.id === model.suspected.id
+            );
+            if (!suspectedNode) return null;
+            const ringIcon = createSuspectedRingIcon(L);
+            return (
+              <Marker
+                key={`suspected-ring-${suspectedNode.id}`}
+                position={[suspectedNode.lat, suspectedNode.lon]}
+                icon={ringIcon}
+                pane="incidentRingPane"
+                interactive={false}
+                zIndexOffset={2000}
+              />
+            );
+          })()}
       </MapContainer>
     </div>
   );

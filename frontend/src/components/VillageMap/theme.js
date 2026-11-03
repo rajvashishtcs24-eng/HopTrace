@@ -16,6 +16,26 @@ export const VILLAGE_COLORS = {
   Daulatpur: '#f59e0b',
 };
 
+export const VILLAGE_STATUS_COLORS = {
+  healthy: '#10b981',
+  degraded: '#f59e0b',
+  critical: '#ef4444',
+  unknown: '#64748b',
+};
+
+/**
+ * Returns color code for village aggregate network health status.
+ * @param {string | null | undefined} status
+ * @returns {string}
+ */
+export function villageStatusColor(status) {
+  if (status && typeof status === 'string') {
+    const s = status.toLowerCase();
+    if (VILLAGE_STATUS_COLORS[s]) return VILLAGE_STATUS_COLORS[s];
+  }
+  return VILLAGE_STATUS_COLORS.unknown;
+}
+
 /**
  * Returns color code corresponding to risk score, identical to TopologyCanvas.
  * @param {number} score

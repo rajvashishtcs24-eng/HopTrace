@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { NODE_TYPES_META } from './theme';
+import { NODE_TYPES_META, VILLAGE_STATUS_COLORS } from './theme';
 
 /**
  * Collapsible map legend displaying node types, risk tiers, link styles,
- * and operational overlays.
+ * village coverage health statuses, and incident blast radius markers.
  * Theme tokens cited from TopologyCanvas (commit f46157e).
  */
 export default function Legend() {
@@ -52,10 +52,10 @@ export default function Legend() {
             </div>
           </div>
 
-          {/* Risk Levels */}
+          {/* Link Risk Scale */}
           <div>
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Risk Scale
+              Link Risk Scale
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="flex items-center gap-1.5">
@@ -77,34 +77,74 @@ export default function Legend() {
             </div>
           </div>
 
-          {/* Links & Overlays */}
+          {/* Village Coverage Health */}
           <div>
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-              Links & Overlays
+              AP Coverage & Village Health
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 bg-sky-400 inline-block" />
-                <span className="text-[11px]">Solid: Healthy link</span>
+                <span
+                  className="w-3 h-3 rounded-full border shrink-0 inline-block"
+                  style={{
+                    borderColor: VILLAGE_STATUS_COLORS.healthy,
+                    backgroundColor: `${VILLAGE_STATUS_COLORS.healthy}33`,
+                  }}
+                />
+                <span className="text-[11px]">Healthy village coverage</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 border-t border-dashed border-red-500 inline-block" />
-                <span className="text-[11px]">Dashed: High risk link</span>
+                <span
+                  className="w-3 h-3 rounded-full border shrink-0 inline-block"
+                  style={{
+                    borderColor: VILLAGE_STATUS_COLORS.degraded,
+                    backgroundColor: `${VILLAGE_STATUS_COLORS.degraded}33`,
+                  }}
+                />
+                <span className="text-[11px]">Degraded village coverage</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full border border-emerald-400/80 bg-emerald-500/20 inline-block" />
-                <span className="text-[11px]">AP coverage radius</span>
+                <span
+                  className="w-3 h-3 rounded-full border shrink-0 inline-block"
+                  style={{
+                    borderColor: VILLAGE_STATUS_COLORS.critical,
+                    backgroundColor: `${VILLAGE_STATUS_COLORS.critical}33`,
+                  }}
+                />
+                <span className="text-[11px]">Critical village coverage</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full border border-red-500/80 bg-red-500/30 inline-block" />
-                <span className="text-[11px]">Suspected component / blast</span>
+                <span className="w-3 h-3 rounded-full border border-dashed border-red-500 bg-red-500/40 shrink-0 inline-block" />
+                <span className="text-[11px]">Blast radius AP (affected users)</span>
               </div>
             </div>
           </div>
 
-          {/* Placement Notice */}
-          <div className="pt-2 border-t border-slate-700/50 text-[10px] text-slate-400 leading-tight">
-            Illustrative placement, not surveyed.
+          {/* Links & Overlays */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Links & Incidents
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 bg-emerald-400 inline-block" />
+                <span className="text-[11px]">Healthy link (solid)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-t border-dashed border-red-500 inline-block" />
+                <span className="text-[11px]">Dashed: Packet loss / down</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full border-2 border-red-500 inline-block shrink-0" />
+                <span className="text-[11px]">Pulsing: Suspected root cause</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Notice */}
+          <div className="pt-2 border-t border-slate-700/50 space-y-1 text-[10px] text-slate-400 leading-tight">
+            <div>Village health status updates on dashboard refresh.</div>
+            <div className="text-slate-500">Illustrative placement, not surveyed.</div>
           </div>
         </div>
       )}

@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { telemetryLabel } from './theme.js';
+import { telemetryLabel, villageStatusColor } from './theme.js';
+
+test('villageStatusColor: maps all backend status strings', () => {
+  assert.equal(villageStatusColor('healthy'), '#10b981');
+  assert.equal(villageStatusColor('degraded'), '#f59e0b');
+  assert.equal(villageStatusColor('critical'), '#ef4444');
+  assert.equal(villageStatusColor('unknown'), '#64748b');
+  assert.equal(villageStatusColor(null), '#64748b');
+  assert.equal(villageStatusColor(undefined), '#64748b');
+  assert.equal(villageStatusColor('invalid'), '#64748b');
+});
 
 test('telemetryLabel: returns Simulated telemetry for simulated', () => {
   assert.equal(telemetryLabel('simulated'), 'Simulated telemetry');
