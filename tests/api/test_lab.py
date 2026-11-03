@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 
 from app.db.connection import get_db_connection
 from app.db.repository import get_incident, get_latest_incident
+from app.engine.topology import get_default_links
 
 
 # ── 1. Successful Baseline Run ────────────────────────────────────────────────
@@ -336,7 +337,7 @@ def test_lab_run_upstream_failure_success(client: TestClient, isolated_db: str) 
     data = response.json()
     assert data["run_id"].startswith("run-")
     assert data["data_source"] == "simulated"
-    assert data["measurements_count"] == 5
+    assert data["measurements_count"] == len(get_default_links())
     assert data["incident_id"] is not None
 
     # Verify incident persisted in SQLite with inferred L1 suspect
@@ -389,16 +390,17 @@ def test_lab_run_upstream_failure_affected_subscribers_and_measurements(
     aff_resp = client.get(f"/api/v1/incidents/{incident_id}/affected-subscribers")
     assert aff_resp.status_code == 200
     aff_data = aff_resp.json()
-    assert aff_data["count"] == 5
+    assert aff_data["count"] == 20
     sub_ids = {s["id"] for s in aff_data["subscribers"]}
-    assert sub_ids == {"SUB101", "SUB102", "SUB201", "SUB202", "SUB203"}
+    assert len(sub_ids) == 20
+    assert {"SUB101", "SUB102", "SUB103", "SUB201", "SUB202", "SUB203", "SUB204"}.issubset(sub_ids)
 
     # 2. Check measurements: L1 has connectivity_ok=False; interior links have connectivity_ok=True but 100% loss
     meas_resp = client.get(f"/api/v1/runs/{run_id}/measurements")
     assert meas_resp.status_code == 200
     meas_data = meas_resp.json()
     assert meas_data["data_source"] == "simulated"
-    assert len(meas_data["measurements"]) == 5
+    assert len(meas_data["measurements"]) == len(get_default_links())
 
     meas_map = {m["component_id"]: m for m in meas_data["measurements"]}
     assert meas_map["L1"]["connectivity_ok"] is False
