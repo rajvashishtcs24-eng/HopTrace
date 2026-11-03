@@ -13,6 +13,7 @@ import SubscriberOps from './components/SubscriberOps';
 import LabPanel from './components/LabPanel';
 import SarvamKeyModal from './components/SarvamKeyModal';
 import ToastStack from './components/ToastStack';
+import AlertOverlay from './components/AlertOverlay/AlertOverlay';
 
 export default function App() {
   useLiveTelemetry();
@@ -119,6 +120,7 @@ export default function App() {
 
       {/* ── Toast Stack ───────────────────────────────────────────────── */}
       <ToastStack />
+      <AlertOverlay />
     </div>
   );
 }
