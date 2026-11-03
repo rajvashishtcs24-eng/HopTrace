@@ -13,15 +13,28 @@ import {
 import L from 'leaflet';
 import useStore from '../../store/appStore';
 import './leafletSetup';
-import { computeBounds } from './geo';
+import {
+  computeBounds,
+  parseGHz,
+  fresnelF1Metres,
+  clearance60,
+  getLinkMidpoint,
+  getPredictedEtaMinutes,
+} from './geo';
 import { telemetryLabel, riskColor, villageStatusColor } from './theme';
 import { getLinkStrokeWidth, getLinkDashArray } from './risk';
 import { buildMapModel } from './model';
-import { createNodeIcon, createSuspectedRingIcon, NODE_Z_INDEX } from './icons';
+import {
+  createNodeIcon,
+  createSuspectedRingIcon,
+  createPredictionBadgeIcon,
+  NODE_Z_INDEX,
+} from './icons';
 import { getStoredLayers, setStoredLayers, LABEL_MIN_ZOOM } from './layerPrefs';
 import Legend from './Legend';
 import MapPanes from './MapPanes';
 import LayerToggles from './LayerToggles';
+import VillageSummary from './VillageSummary';
 
 const ERROR_TILE_URL =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -223,6 +236,7 @@ export default function VillageMap() {
       >
         <MapPanes />
         <ZoomTracker onZoomChange={handleZoomChange} />
+        <VillageSummary />
 
         <TileLayer
           ref={tileLayerRef}
@@ -338,12 +352,60 @@ export default function VillageMap() {
                     <div className="text-[11px] text-slate-400">
                       {link.source} &rarr; {link.target}
                     </div>
-                    {link.distance_km !== undefined && (
+
+                    {link.distance_km !== undefined && link.distance_km !== null && (
                       <div className="flex justify-between text-[11px]">
                         <span className="text-slate-400">Distance:</span>
                         <span className="font-mono">{link.distance_km} km</span>
                       </div>
                     )}
+                    {link.medium && (
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-400">Medium:</span>
+                        <span className="font-mono capitalize">
+                          {link.medium.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Fresnel Zone Section for Wireless PtP links */}
+                    {link.medium === 'wireless_ptp' &&
+                      Number.isFinite(link.distance_km) &&
+                      (() => {
+                        const band = parseGHz(link.frequency);
+                        const f1 = band ? fresnelF1Metres(link.distance_km, band) : null;
+                        const clearance = f1 !== null ? clearance60(f1) : null;
+
+                        return (
+                          <div className="pt-1.5 mt-1 border-t border-slate-700/60 text-[11px] space-y-1">
+                            <div className="text-[10px] uppercase font-semibold text-sky-400 tracking-wider">
+                              Fresnel Zone (Mid-Path)
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Band:</span>
+                              <span className="font-mono">
+                                {band !== null ? `${band} GHz` : 'band unavailable'}
+                              </span>
+                            </div>
+                            {f1 !== null && clearance !== null && (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">F1 Radius:</span>
+                                  <span className="font-mono">{f1.toFixed(2)} m</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-400">60% Clearance:</span>
+                                  <span className="font-mono">{clearance.toFixed(2)} m</span>
+                                </div>
+                              </>
+                            )}
+                            <div className="text-[9px] text-slate-500 italic">
+                              estimate, no terrain data
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                     {link.live && (
                       <>
                         <div className="flex justify-between text-[11px]">
@@ -377,6 +439,27 @@ export default function VillageMap() {
                   </div>
                 </Popup>
               </Polyline>
+            );
+          })}
+
+        {/* Prediction Badges Layer */}
+        {layers.links &&
+          model.links.map((link) => {
+            const eta = getPredictedEtaMinutes(link.live);
+            if (eta === null) return null;
+            const midpoint = getLinkMidpoint(link.sourceNode, link.targetNode);
+            if (!midpoint) return null;
+
+            const badgeIcon = createPredictionBadgeIcon(eta, L);
+            return (
+              <Marker
+                key={`pred-${link.id}-${eta}`}
+                position={midpoint}
+                icon={badgeIcon}
+                pane="incidentRingPane"
+                interactive={false}
+                zIndexOffset={1500}
+              />
             );
           })}
 

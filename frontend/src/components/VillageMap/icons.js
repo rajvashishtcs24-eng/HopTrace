@@ -147,3 +147,49 @@ export function createSuspectedRingIcon(leaflet) {
   }
   return config;
 }
+
+/**
+ * Generates configuration for an amber prediction badge DivIcon.
+ *
+ * @param {number} etaMinutes
+ * @returns {{
+ *   html: string,
+ *   className: string,
+ *   iconSize: [number, number],
+ *   iconAnchor: [number, number]
+ * }}
+ */
+export function getPredictionBadgeConfig(etaMinutes) {
+  const rounded = Math.round(etaMinutes);
+  const ariaLabel = `Predicted ETA about ${rounded} minutes (simulated)`;
+  const html = `
+    <div
+      aria-label="${ariaLabel}"
+      title="${ariaLabel}"
+      style="background: #f59e0b; color: #0b172a; font-size: 10px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, monospace; padding: 1px 5px; border-radius: 4px; border: 1px solid #d97706; box-shadow: 0 2px 4px rgba(0,0,0,0.5); white-space: nowrap; pointer-events: none; text-align: center; display: inline-block; transform: translate(-50%, -50%);"
+    >
+      ~${rounded} min
+    </div>
+  `;
+  return {
+    html,
+    className: 'hoptrace-prediction-badge-icon',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  };
+}
+
+/**
+ * Creates a Leaflet DivIcon for the prediction badge marker.
+ *
+ * @param {number} etaMinutes
+ * @param {Object} [leaflet]
+ * @returns {Object}
+ */
+export function createPredictionBadgeIcon(etaMinutes, leaflet) {
+  const config = getPredictionBadgeConfig(etaMinutes);
+  if (leaflet && typeof leaflet.divIcon === 'function') {
+    return leaflet.divIcon(config);
+  }
+  return config;
+}

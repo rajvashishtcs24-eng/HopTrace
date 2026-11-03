@@ -5,6 +5,8 @@ import {
   getSuspectedRingConfig,
   createNodeIcon,
   createSuspectedRingIcon,
+  getPredictionBadgeConfig,
+  createPredictionBadgeIcon,
   NODE_Z_INDEX,
 } from './icons.js';
 
@@ -69,4 +71,19 @@ test('createNodeIcon and createSuspectedRingIcon: delegates to Leaflet divIcon w
   const ringIcon = createSuspectedRingIcon(mockLeaflet);
   assert.equal(ringIcon._leafletIcon, true);
   assert.deepEqual(ringIcon.opts.iconSize, [44, 44]);
+});
+
+test('getPredictionBadgeConfig and createPredictionBadgeIcon: builds amber badge with rounded minutes and simulated label', () => {
+  const config = getPredictionBadgeConfig(45.4);
+  assert.match(config.html, /~45 min/);
+  assert.match(config.html, /aria-label="Predicted ETA about 45 minutes \(simulated\)"/);
+  assert.match(config.html, /pointer-events:\s*none/);
+  assert.match(config.html, /#f59e0b/);
+
+  const mockLeaflet = {
+    divIcon: (opts) => ({ _isIcon: true, opts }),
+  };
+  const icon = createPredictionBadgeIcon(30, mockLeaflet);
+  assert.equal(icon._isIcon, true);
+  assert.match(icon.opts.html, /~30 min/);
 });
