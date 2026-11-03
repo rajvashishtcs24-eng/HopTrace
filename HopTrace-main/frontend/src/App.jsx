@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import AlertOverlay from './components/AlertOverlay/AlertOverlay';
+import { appStore } from './store/appStore';
 import './App.css';
 
 const API_BASE = '/api/v1';
@@ -207,6 +209,7 @@ export default function App() {
           const incData = await incRes.json();
           if (incData && incData.id) {
             setActiveIncident(incData);
+            appStore.notifyIncident(incData, incidentSubscribers, false);
             fetchAffectedSubscribers(incData.id);
             if (incData.run_id) {
               setActiveRunId(incData.run_id);
@@ -214,14 +217,17 @@ export default function App() {
             }
           } else {
             setActiveIncident(null);
+            appStore.notifyIncident(null);
             setIncidentSubscribers([]);
           }
         } else {
           setActiveIncident(null);
+          appStore.notifyIncident(null);
           setIncidentSubscribers([]);
         }
       } catch {
         setActiveIncident(null);
+        appStore.notifyIncident(null);
         setIncidentSubscribers([]);
       }
     } catch (err) {
@@ -229,11 +235,16 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkHealth, fetchSubscribers]);
 
   // Initial load
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    (async () => {
+      if (isMounted) await fetchData();
+    })();
+    return () => { isMounted = false; };
   }, [fetchData]);
 
   // Auto-refresh timer (5s)
@@ -289,6 +300,7 @@ export default function App() {
 
       if (sc === 'baseline' || !associatedIncidentId) {
         setActiveIncident(null);
+        appStore.notifyIncident(null);
         setIncidentSubscribers([]);
         setHindiExplanation('');
         showToast('Baseline restored — All network links healthy.');
@@ -373,8 +385,6 @@ export default function App() {
       setExplainingHindi(false);
     }
   };
-
-  const handleExplainHindi = () => handleExplainLocalized(sarvamLanguage);
 
   // Sarvam Bulbul Neural TTS Audio with device speech fallback
   const toggleSpeechAudio = async () => {
@@ -944,7 +954,7 @@ export default function App() {
                     <div className="evidence-title">Telemetry Evidence:</div>
                     <ul>
                       {activeIncident.evidence.map((ev, i) => {
-                        let desc = '';
+                        let desc;
                         if (typeof ev === 'string') {
                           desc = ev;
                         } else if (ev && typeof ev === 'object') {
@@ -1578,6 +1588,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Alert Overlay */}
+      <AlertOverlay />
     </div>
   );
 }
