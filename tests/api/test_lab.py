@@ -28,6 +28,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db.connection import get_db_connection
+from app.db.init import DEMO_INCIDENTS
 from app.db.repository import get_incident, get_latest_incident
 from app.engine.topology import get_default_links
 
@@ -433,9 +434,10 @@ def test_lab_run_ambiguous_fault_success(client: TestClient, isolated_db: str) -
 # ── 15. Demo Incident Preserved ──────────────────────────────────────────────
 
 def test_lab_run_demo_incident_preserved(client: TestClient, isolated_db: str) -> None:
-    """Demo incident incident-001 is preserved across simulation runs."""
+    """Demo incident is preserved across simulation runs."""
+    demo_id = DEMO_INCIDENTS[0]["id"]
     conn = get_db_connection(isolated_db)
-    demo = get_incident(conn, "incident-001")
+    demo = get_incident(conn, demo_id)
     assert demo is not None
 
     client.post(
@@ -443,9 +445,9 @@ def test_lab_run_demo_incident_preserved(client: TestClient, isolated_db: str) -
         json={"scenario": "degrade_link", "target_link_id": "L5", "severity": "medium"},
     )
 
-    demo_after = get_incident(conn, "incident-001")
+    demo_after = get_incident(conn, demo_id)
     assert demo_after is not None
-    assert demo_after["id"] == "incident-001"
+    assert demo_after["id"] == demo_id
 
 
 # ── 16. Topology Provider Failure ────────────────────────────────────────────
