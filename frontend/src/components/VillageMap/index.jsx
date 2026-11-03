@@ -240,9 +240,10 @@ export default function VillageMap() {
 
         <TileLayer
           ref={tileLayerRef}
-          url="https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          className="hoptrace-dark-tiles"
           maxZoom={19}
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a> &copy; OpenStreetMap contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           errorTileUrl={ERROR_TILE_URL}
           eventHandlers={{
             tileerror: () => setIsOffline(true),
