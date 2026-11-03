@@ -1,7 +1,7 @@
-﻿import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 /* --- AlertOverlay state --- */
-const storeState = {
+let storeState = {
   alertOpen: false,
   isArmed: false,
   isMuted: false,
@@ -18,6 +18,7 @@ function emitChange() {
 }
 
 export const appStore = {
+  getSnapshot: () => storeState,
   getState: () => storeState,
 
   subscribe: (listener) => {
@@ -25,8 +26,10 @@ export const appStore = {
     return () => listeners.delete(listener);
   },
 
+  emitChange: () => emitChange(),
+
   armDemo: () => {
-    storeState.isArmed = true;
+    storeState = { ...storeState, isArmed: true };
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const silentUtterance = new SpeechSynthesisUtterance('');
       window.speechSynthesis.speak(silentUtterance);
@@ -35,18 +38,18 @@ export const appStore = {
   },
 
   toggleMute: () => {
-    storeState.isMuted = !storeState.isMuted;
+    storeState = { ...storeState, isMuted: !storeState.isMuted };
     emitChange();
   },
 
   dismissAlert: () => {
-    storeState.alertOpen = false;
+    storeState = { ...storeState, alertOpen: false };
     emitChange();
   },
 
   reopenAlert: () => {
     if (storeState.activeIncident?.id) {
-      storeState.alertOpen = true;
+      storeState = { ...storeState, alertOpen: true };
       emitChange();
     }
   },
@@ -55,25 +58,46 @@ export const appStore = {
     const incId = incident?.id;
 
     if (!incId) {
-      storeState.activeIncident = null;
-      storeState.affectedSubscribers = [];
-      storeState.alertOpen = false;
+      storeState = {
+        ...storeState,
+        activeIncident: null,
+        affectedSubscribers: [],
+        alertOpen: false,
+      };
       emitChange();
       return;
     }
 
-    storeState.activeIncident = incident;
-    storeState.affectedSubscribers = subscribers;
-
     if (isInitialLoad) {
-      storeState.seenIncidentIds.add(incId);
+      const nextSeen = new Set(storeState.seenIncidentIds);
+      nextSeen.add(incId);
+      storeState = {
+        ...storeState,
+        activeIncident: incident,
+        affectedSubscribers: subscribers,
+        seenIncidentIds: nextSeen,
+      };
       emitChange();
       return;
     }
 
     if (!storeState.seenIncidentIds.has(incId)) {
-      storeState.seenIncidentIds.add(incId);
-      storeState.alertOpen = true;
+      const nextSeen = new Set(storeState.seenIncidentIds);
+      nextSeen.add(incId);
+      storeState = {
+        ...storeState,
+        activeIncident: incident,
+        affectedSubscribers: subscribers,
+        seenIncidentIds: nextSeen,
+        alertOpen: true,
+      };
+      emitChange();
+    } else {
+      storeState = {
+        ...storeState,
+        activeIncident: incident,
+        affectedSubscribers: subscribers,
+      };
       emitChange();
     }
   },
@@ -85,6 +109,6 @@ export const appStore = {
 export function useAppStore(selector = (s) => s) {
   return useSyncExternalStore(
     appStore.subscribe,
-    () => selector(appStore.getState())
+    () => selector(appStore.getSnapshot())
   );
 }

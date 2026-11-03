@@ -1,10 +1,11 @@
-﻿import { useEffect, useState, useRef, useCallback } from 'react';
-import { appStore, useAppStore } from '../../store/appStore';
+import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react';
+import { appStore } from '../../store/appStore';
 import { parseFaultClass, buildHindiSpeechText, playHindiAlertAudio } from './alertVoice';
 import './AlertOverlay.css';
 
 export default function AlertOverlay() {
-  const { alertOpen, isArmed, isMuted, activeIncident, affectedSubscribers } = useAppStore();
+  const state = useSyncExternalStore(appStore.subscribe, appStore.getSnapshot);
+  const { isArmed, isMuted, alertOpen, activeIncident, affectedSubscribers } = state;
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isCollapsing, setIsCollapsing] = useState(false);
@@ -100,7 +101,7 @@ export default function AlertOverlay() {
         <button
           type="button"
           className={`demo-chip ${isArmed ? 'armed' : ''}`}
-          onClick={appStore.armDemo}
+          onClick={() => appStore.armDemo()}
           title="Arm audio for immediate playback on fault"
         >
           <span>{isArmed ? '● Armed' : '○ Arm Audio Demo'}</span>
@@ -108,7 +109,7 @@ export default function AlertOverlay() {
         <button
           type="button"
           className="demo-chip"
-          onClick={appStore.toggleMute}
+          onClick={() => appStore.toggleMute()}
           title="Toggle Voice Mute"
         >
           <span>{isMuted ? '🔇 Muted' : '🔊 Voice On'}</span>
@@ -117,7 +118,7 @@ export default function AlertOverlay() {
           <button
             type="button"
             className="demo-chip"
-            onClick={appStore.reopenAlert}
+            onClick={() => appStore.reopenAlert()}
             title="Replay Alert Overlay"
           >
             <span>🚨 Replay Alert</span>
