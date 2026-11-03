@@ -56,6 +56,17 @@ def test_baseline_clears_live_fault(client: TestClient, isolated_db: str) -> Non
     assert prev_incident is not None
     assert prev_incident.status == "closed", f"Expected previous incident to be closed, got {prev_incident.status}"
 
+    # Assert GET /incidents/latest returns null when latest incident is closed
+    latest_resp = client.get("/api/v1/incidents/latest")
+    assert latest_resp.status_code == 200
+    assert latest_resp.json() is None, f"Expected /incidents/latest to be null, got {latest_resp.json()}"
+
+    # Historical incident lookup by ID still works
+    hist_resp = client.get(f"/api/v1/incidents/{incident_id}")
+    assert hist_resp.status_code == 200
+    assert hist_resp.json()["id"] == incident_id
+    assert hist_resp.json()["status"] == "closed"
+
     # (b) Assert next batch / websocket has active_incident null
     with client.websocket_connect("/ws/telemetry") as ws:
         # First message is 'connected'

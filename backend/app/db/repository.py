@@ -161,6 +161,22 @@ def get_latest_incident(conn: sqlite3.Connection) -> dict[str, Any] | None:
     return _row_to_incident(row) if row is not None else None
 
 
+def get_latest_open_incident(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    """Fetch the most recent open diagnostic incident (status != 'closed'), or None."""
+    cursor = conn.execute(
+        """
+        SELECT id, run_id, status, suspected_component_id, suspected_component_type,
+               summary, confidence_score, evidence, uncertainty_note, data_source, created_at
+        FROM incidents
+        WHERE status != 'closed'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1;
+        """
+    )
+    row = cursor.fetchone()
+    return _row_to_incident(row) if row is not None else None
+
+
 def get_incident(conn: sqlite3.Connection, incident_id: str) -> dict[str, Any] | None:
     """Fetch a single incident by ID, or None if not found."""
     cursor = conn.execute(
