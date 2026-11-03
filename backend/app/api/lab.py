@@ -12,6 +12,7 @@ v2 changes:
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -29,6 +30,7 @@ from app.schemas.lab import (
 )
 
 router = APIRouter(tags=["lab"])
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -129,8 +131,14 @@ def run_lab_scenario(
                         "data_source": incident_details.data_source,
                         "created_at": incident_details.created_at,
                     })
-                except Exception:
-                    pass  # Non-critical persistence failure
+                except Exception as exc:
+                    logger.exception("Failed to persist incident %s to database", incident_details.id)
+                    incident_details.status = "closed"
+                    engine.close_open_incidents()
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to persist incident.",
+                    ) from exc
     else:
         # A baseline run (or any run yielding no open incident) closes open incidents in the database
         try:
