@@ -314,4 +314,4 @@ def test_clean_api_error_handling(client: TestClient) -> None:
         json={"scenario": "upstream_failure", "target_node_id": "NON_EXISTENT_NODE"},
     )
     assert r3.status_code == 422
-    assert "not found in network topology" in r3.json()["detail"].lower()
+    assert "not found in topology" in r3.json()["detail"].lower()

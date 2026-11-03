@@ -367,7 +367,7 @@ def test_lab_run_upstream_failure_non_existent_target_node_422(
         },
     )
     assert response.status_code == 422
-    assert "not found in network topology" in response.json()["detail"]
+    assert "not found in topology" in response.json()["detail"].lower()
 
 
 def test_lab_run_upstream_failure_affected_subscribers_and_measurements(
@@ -466,7 +466,7 @@ def test_lab_run_topology_provider_failure_returns_503(client: TestClient, isola
         )
         assert response.status_code == 503
         data = response.json()
-        assert "Network topology is currently unavailable" in data["detail"]
+        assert "Network topology unavailable" in data["detail"]
         mock_run_scenario.assert_not_called()
 
 
@@ -479,5 +479,5 @@ def test_lab_run_topology_provider_failure_baseline_returns_503(client: TestClie
             json={"scenario": "baseline"},
         )
         assert response.status_code == 503
-        assert "Network topology is currently unavailable" in response.json()["detail"]
+        assert "Network topology unavailable" in response.json()["detail"]
         mock_run_scenario.assert_not_called()
