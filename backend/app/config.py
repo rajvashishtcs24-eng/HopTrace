@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     sarvam_model: str = "sarvam-105b"
     sarvam_timeout_seconds: float = 30.0
 
+    # --- Telemetry Ingestion ---
+    # Optional API key for POST /api/v1/measurements/ingest (header X-API-Key)
+    ingest_api_key: str = ""
+
     @field_validator("sarvam_model", mode="before")
     @classmethod
     def _validate_sarvam_model(cls, v: object) -> str:

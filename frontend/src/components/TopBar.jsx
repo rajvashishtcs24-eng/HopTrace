@@ -21,8 +21,14 @@ export default function TopBar({ onOpenSarvam, onRefresh }) {
   const loading = useStore(s => s.loading);
   const networkStatus = useStore(s => s.networkStatus);
   const cascadeDetected = useStore(s => s.cascadeDetected);
+  const telemetryDataSource = useStore(s => s.telemetryDataSource);
+  const liveMeasurements = useStore(s => s.liveMeasurements);
+  const topology = useStore(s => s.topology);
 
-  const statusColor = networkStatus === 'healthy' ? 'text-emerald-400' : networkStatus === 'degraded' ? 'text-amber-400' : 'text-red-400';
+  const isLive =
+    telemetryDataSource === 'live' ||
+    topology?.data_source === 'live' ||
+    (Array.isArray(liveMeasurements) && liveMeasurements.some(m => m.data_source === 'live'));
 
   return (
     <header className="flex items-center gap-3 px-4 py-2 bg-[#060e1c] border-b border-slate-800 shrink-0">
@@ -44,6 +50,19 @@ export default function TopBar({ onOpenSarvam, onRefresh }) {
         <span className={`w-1.5 h-1.5 rounded-full ${networkStatus === 'healthy' ? 'bg-emerald-400' : networkStatus === 'degraded' ? 'bg-amber-400' : 'bg-red-400'} ${networkStatus !== 'healthy' ? 'animate-pulse' : ''}`} />
         {networkStatus.toUpperCase()}
         {cascadeDetected && <span className="ml-1 text-red-300">· CASCADE</span>}
+      </div>
+
+      {/* Live vs Simulated Telemetry Badge */}
+      <div
+        data-testid="telemetry-source-badge"
+        className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-semibold ${
+          isLive
+            ? 'border-emerald-600 bg-emerald-950 text-emerald-300'
+            : 'border-slate-700 bg-slate-900 text-slate-400'
+        }`}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+        <span>{isLive ? '● Live' : '○ Simulated'}</span>
       </div>
 
       <div className="flex-1" />

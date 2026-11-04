@@ -187,7 +187,9 @@ export default function VillageMap() {
     (bounds[0][1] + bounds[1][1]) / 2,
   ];
 
-  const label = telemetryLabel(dataSource);
+  const isAnyLive = dataSource === 'live' || model.links.some(l => l.live?.data_source === 'live');
+  const label = isAnyLive ? 'Live telemetry' : telemetryLabel(dataSource);
+  const activeSource = isAnyLive ? 'live' : dataSource;
 
   return (
     <div className="relative isolate w-full h-full min-h-[480px] bg-[#050d1a] overflow-hidden select-none">
@@ -197,11 +199,11 @@ export default function VillageMap() {
         aria-label="Telemetry data source"
         className="absolute top-3 right-3 z-[1000] bg-slate-900/90 backdrop-blur-sm border border-slate-700/70 text-slate-300 text-[11px] sm:text-xs px-2.5 py-1.5 rounded shadow pointer-events-none flex items-center gap-2 max-w-[calc(100%-1rem)] sm:max-w-max leading-tight"
       >
-        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+        <span className={`w-2 h-2 rounded-full shrink-0 ${isAnyLive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
         <span>
           {label
-            ? `${label} · illustrative placement · source: ${dataSource}`
-            : `illustrative placement · source: ${dataSource}`}
+            ? `${label} · illustrative placement · source: ${activeSource}`
+            : `illustrative placement · source: ${activeSource}`}
         </span>
       </div>
 
@@ -330,6 +332,7 @@ export default function VillageMap() {
                         medium: link.medium,
                         frequency: link.frequency,
                         status: link.isDown ? 'down' : 'up',
+                        data_source: link.live?.data_source || 'simulated',
                       },
                     });
                   },
@@ -339,15 +342,26 @@ export default function VillageMap() {
                   <div className="space-y-1.5 text-xs text-slate-200">
                     <div className="flex items-center justify-between border-b border-slate-700/60 pb-1">
                       <span className="font-semibold text-white">Link: {link.id}</span>
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                        style={{
-                          backgroundColor: `${riskColor(link.risk_score)}22`,
-                          color: riskColor(link.risk_score),
-                        }}
-                      >
-                        Risk {link.risk_score}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                            link.live?.data_source === 'live'
+                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-700/60'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}
+                        >
+                          {link.live?.data_source === 'live' ? '● Live' : '○ Simulated'}
+                        </span>
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                          style={{
+                            backgroundColor: `${riskColor(link.risk_score)}22`,
+                            color: riskColor(link.risk_score),
+                          }}
+                        >
+                          Risk {link.risk_score}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-[11px] text-slate-400">
                       {link.source} &rarr; {link.target}
@@ -433,8 +447,9 @@ export default function VillageMap() {
                         <span>⚠</span> Suspected root cause link
                       </div>
                     )}
-                    <div className="pt-1 border-t border-slate-700/60 text-[10px] text-slate-400">
-                      {label || 'Telemetry'} · source: {dataSource}
+                    <div className="pt-1 border-t border-slate-700/60 text-[10px] text-slate-400 flex items-center justify-between">
+                      <span>{label || 'Telemetry'}</span>
+                      <span className="capitalize">source: {link.live?.data_source || dataSource}</span>
                     </div>
                   </div>
                 </Popup>

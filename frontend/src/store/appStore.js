@@ -12,7 +12,8 @@ const useStore = create((set, get) => ({
   setTopology: (t) => set({ topology: t }),
 
   // ── Live telemetry ──────────────────────────────────────────────────────
-  liveMeasurements: [],        // [{link_id, latency_ms, packet_loss_pct, throughput_mbps, connectivity_ok, risk_score, trend, alert_level}]
+  liveMeasurements: [],        // [{link_id, latency_ms, packet_loss_pct, throughput_mbps, connectivity_ok, risk_score, trend, alert_level, data_source}]
+  telemetryDataSource: 'simulated',
   lastTick: 0,
   networkStatus: 'healthy',   // healthy | degraded | critical
   cascadeDetected: false,
@@ -22,8 +23,12 @@ const useStore = create((set, get) => ({
     const nextActiveIncident = hasActiveIncident ? payload.active_incident : get().activeIncident;
     const shouldClearAffected = hasActiveIncident && payload.active_incident === null;
 
+    const hasLive = payload.data_source === 'live' || (payload.measurements || []).some(m => m.data_source === 'live');
+    const source = hasLive ? 'live' : (payload.data_source || 'simulated');
+
     set({
       liveMeasurements: payload.measurements || [],
+      telemetryDataSource: source,
       lastTick: payload.tick || 0,
       networkStatus: payload.network_status || 'healthy',
       cascadeDetected: payload.cascade_detected || false,

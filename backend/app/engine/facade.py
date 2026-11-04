@@ -9,6 +9,9 @@ Exposes stable, typed Python functions for backend services to consume:
 - get_affected_subscribers()
 - get_run_measurements()
 - check_neo4j_health()
+- ingest_live_measurements()
+- get_live_measurements()
+- clear_live_measurements()
 
 Adheres strictly to docs/api-contract.md.
 """
@@ -45,6 +48,7 @@ class HopTraceEngine:
         self._runs: Dict[str, RunMeasurementsResponse] = {}
         self._incidents: Dict[str, IncidentDetails] = {}
         self._incident_order: List[str] = []
+        self._live_measurements: Dict[str, Any] = {}
 
     def is_neo4j_available(self) -> bool:
         """Checks if live Neo4j database is accessible."""
@@ -145,6 +149,60 @@ class HopTraceEngine:
             incident_id=incident_id,
         )
 
+    def ingest_live_measurements(self, measurements: List[Any]) -> ScenarioRunResponse:
+        """Stores live measurements, pushes them into the time-series store, and runs diagnosis."""
+        for m in measurements:
+            m.data_source = "live"
+            self._live_measurements[m.component_id] = m
+
+        from app.engine.time_series import get_time_series_store
+        ts_store = get_time_series_store()
+        ts_store.push_measurements_batch(measurements)
+
+        # Build full measurements list by overlaying live measurements onto baseline
+        baseline_meas = self.telemetry_generator.generate_baseline_with_noise()
+        active_meas_map = {m.component_id: m for m in baseline_meas}
+        for m in self._live_measurements.values():
+            active_meas_map[m.component_id] = m
+        active_measurements = list(active_meas_map.values())
+
+        run_id = f"live-{uuid.uuid4().hex[:8]}"
+        self._runs[run_id] = RunMeasurementsResponse(
+            run_id=run_id,
+            data_source="live",
+            measurements=active_measurements,
+        )
+
+        topology = self.get_topology(force_in_memory=True)
+        incident = self.diagnostic_engine.diagnose(
+            measurements=active_measurements,
+            topology=topology,
+            run_id=run_id,
+        )
+
+        incident_id: Optional[str] = None
+        if incident.suspected_component_id is not None and incident.status == "open":
+            incident_id = incident.id
+            self._incidents[incident.id] = incident
+            self._incident_order.append(incident.id)
+        else:
+            self.close_open_incidents()
+
+        return ScenarioRunResponse(
+            run_id=run_id,
+            data_source="live",
+            measurements_count=len(measurements),
+            incident_id=incident_id,
+        )
+
+    def get_live_measurements(self) -> Dict[str, Any]:
+        """Returns currently ingested live measurements indexed by component ID."""
+        return self._live_measurements
+
+    def clear_live_measurements(self) -> None:
+        """Clears all ingested live measurements."""
+        self._live_measurements.clear()
+
     def close_open_incidents(self) -> List[str]:
         """Marks all currently open incidents in the engine store as closed."""
         closed_ids = []
@@ -238,6 +296,18 @@ def run_scenario(
         ambiguous_link_ids=ambiguous_link_ids,
         force_in_memory=force_in_memory,
     )
+
+
+def ingest_live_measurements(measurements: List[Any]) -> ScenarioRunResponse:
+    return get_engine().ingest_live_measurements(measurements)
+
+
+def get_live_measurements() -> Dict[str, Any]:
+    return get_engine().get_live_measurements()
+
+
+def clear_live_measurements() -> None:
+    get_engine().clear_live_measurements()
 
 
 def get_incident_details(incident_id: str) -> Optional[IncidentDetails]:

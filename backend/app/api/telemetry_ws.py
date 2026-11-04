@@ -4,16 +4,18 @@ Endpoint: WS /ws/telemetry
 
 Pushes a telemetry batch every TICK_INTERVAL_SECONDS seconds to all
 connected clients. Batch includes:
-  - Per-link measurements with risk scores and trends
+  - Per-link measurements with risk scores, trends, and data_source
   - Active incident (if any) from the engine
   - Cascade/flapping detection flags
   - Tick counter
+  - Data source flag ("live" or "simulated")
 
 Message format (JSON):
 {
   "type": "telemetry_batch",
   "tick": 42,
   "timestamp_utc": "2026-11-01T...",
+  "data_source": "live" | "simulated",
   "measurements": [
     {
       "link_id": "L3",
@@ -21,6 +23,7 @@ Message format (JSON):
       "packet_loss_pct": 23.1,
       "throughput_mbps": 5.2,
       "connectivity_ok": true,
+      "data_source": "live",
       "risk_score": 78.3,
       "trend": "degrading",
       "alert_level": "warning"
@@ -101,7 +104,15 @@ async def _streaming_loop() -> None:
                 if run:
                     injected_measurements = run.measurements
 
-            active_measurements = injected_measurements or measurements
+            active_measurements = list(injected_measurements or measurements)
+
+            # Overlay live ingested measurements (if any), replacing simulated values for those links
+            live_meas = engine.get_live_measurements()
+            if live_meas:
+                active_map = {m.component_id: m for m in active_measurements}
+                for comp_id, lm in live_meas.items():
+                    active_map[comp_id] = lm
+                active_measurements = list(active_map.values())
 
             # Push into time-series store
             ts_store.push_measurements_batch(active_measurements, tick=tick)
@@ -119,6 +130,7 @@ async def _streaming_loop() -> None:
                     "packet_loss_pct": m.packet_loss_pct,
                     "throughput_mbps": m.throughput_mbps,
                     "connectivity_ok": m.connectivity_ok,
+                    "data_source": getattr(m, "data_source", "simulated"),
                     "risk_score": risk_info.get("risk_score", 0.0),
                     "trend": risk_info.get("trend", "stable"),
                     "alert_level": risk_info.get("alert_level", "normal"),
@@ -157,10 +169,12 @@ async def _streaming_loop() -> None:
                     "created_at": latest.created_at,
                 }
 
+            has_live = any(getattr(m, "data_source", "simulated") == "live" for m in active_measurements)
             batch = {
                 "type": "telemetry_batch",
                 "tick": tick,
                 "timestamp_utc": now,
+                "data_source": "live" if has_live else "simulated",
                 "measurements": link_payloads,
                 "active_incident": incident_payload,
                 "cascade_detected": cascade_detected,
@@ -217,9 +231,11 @@ async def telemetry_websocket(websocket: WebSocket) -> None:
                 "confidence_score": latest.confidence_score,
                 "created_at": latest.created_at,
             }
+        has_live = any(getattr(m, "data_source", "simulated") == "live" for m in engine.get_live_measurements().values())
         await websocket.send_text(json.dumps({
             "type": "connected",
             "message": "HopTrace v2 live telemetry stream connected.",
+            "data_source": "live" if has_live else "simulated",
             "risk_snapshot": risk_snapshot,
             "active_incident": incident_payload,
         }, default=str))
