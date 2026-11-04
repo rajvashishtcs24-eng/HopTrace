@@ -39,6 +39,7 @@ from .telemetry import (
 from .diagnostics import (
     DiagnosticEngine,
     diagnose,
+    derive_topology_branches,
 )
 from .graph_store import (
     InMemoryGraphStore,
@@ -94,6 +95,7 @@ __all__ = [
     # Diagnostics
     "DiagnosticEngine",
     "diagnose",
+    "derive_topology_branches",
     # Stores
     "InMemoryGraphStore",
     "Neo4jGraphStore",
