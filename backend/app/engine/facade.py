@@ -24,7 +24,9 @@ from .diagnostics import DiagnosticEngine
 from .graph_store import InMemoryGraphStore, Neo4jGraphStore
 from .models import (
     AffectedSubscribersResponse,
+    EvidenceItem,
     IncidentDetails,
+    Measurement,
     NetworkTopology,
     RunMeasurementsResponse,
     ScenarioRunResponse,
@@ -116,12 +118,13 @@ class HopTraceEngine:
             ambiguous_link_ids=ambiguous_link_ids,
         )
 
-        # Store run measurements
+        # Store run measurements in memory and persist in SQLite
         self._runs[run_id] = RunMeasurementsResponse(
             run_id=run_id,
             data_source="simulated",
             measurements=measurements,
         )
+        self._persist_run(run_id=run_id, data_source="simulated", measurements=measurements)
 
         # 2. Retrieve topology for diagnostic context (device relationships)
         topology = self.get_topology(force_in_memory=force_in_memory)
@@ -172,6 +175,7 @@ class HopTraceEngine:
             data_source="live",
             measurements=active_measurements,
         )
+        self._persist_run(run_id=run_id, data_source="live", measurements=active_measurements)
 
         topology = self.get_topology(force_in_memory=True)
         incident = self.diagnostic_engine.diagnose(
@@ -194,6 +198,31 @@ class HopTraceEngine:
             measurements_count=len(measurements),
             incident_id=incident_id,
         )
+
+    def _persist_run(
+        self,
+        run_id: str,
+        data_source: str,
+        measurements: List[Any],
+    ) -> None:
+        """Persists run and measurements into SQLite using configured retention limit."""
+        try:
+            from app.config import settings
+            from app.db.connection import get_db_connection
+            from app.db.repository import save_run
+            conn = get_db_connection()
+            try:
+                save_run(
+                    conn=conn,
+                    run_id=run_id,
+                    data_source=data_source,
+                    measurements=measurements,
+                    retention_limit=settings.runs_retention_limit,
+                )
+            finally:
+                conn.close()
+        except Exception:
+            pass
 
     def get_live_measurements(self) -> Dict[str, Any]:
         """Returns currently ingested live measurements indexed by component ID."""
@@ -249,8 +278,42 @@ class HopTraceEngine:
         )
 
     def get_run_measurements(self, run_id: str) -> Optional[RunMeasurementsResponse]:
-        """Retrieves simulated measurements for a given run ID."""
-        return self._runs.get(run_id)
+        """Retrieves measurements for a given run ID from memory, falling back to SQLite."""
+        if run_id in self._runs:
+            return self._runs[run_id]
+
+        try:
+            from app.db.connection import get_db_connection
+            from app.db.repository import get_run
+            conn = get_db_connection()
+            try:
+                run_dict = get_run(conn, run_id)
+                if run_dict:
+                    meas = [
+                        Measurement(
+                            component_id=m["component_id"],
+                            timestamp_utc=m["timestamp_utc"],
+                            latency_ms=m.get("latency_ms"),
+                            packet_loss_pct=m.get("packet_loss_pct"),
+                            throughput_mbps=m.get("throughput_mbps"),
+                            connectivity_ok=m.get("connectivity_ok", True),
+                            data_source=m.get("data_source", run_dict.get("data_source", "simulated")),
+                        )
+                        for m in run_dict.get("measurements", [])
+                    ]
+                    run_resp = RunMeasurementsResponse(
+                        run_id=run_dict["run_id"],
+                        data_source=run_dict.get("data_source", "simulated"),
+                        measurements=meas,
+                    )
+                    self._runs[run_id] = run_resp
+                    return run_resp
+            finally:
+                conn.close()
+        except Exception:
+            pass
+
+        return None
 
     def check_neo4j_health(self) -> Dict[str, Any]:
         """Checks Neo4j database connectivity."""

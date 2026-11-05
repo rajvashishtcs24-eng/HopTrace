@@ -1,7 +1,7 @@
 """
 Database initialization and demo data seeding — HopTrace v2.
 
-v2: 20 subscribers across 3 villages (AP1–AP6).
+v2: 20 subscribers across 3 villages (AP1–AP6), demo incident and persisted runs/measurements.
 """
 from __future__ import annotations
 
@@ -46,6 +46,28 @@ CREATE TABLE IF NOT EXISTS incidents (
     data_source TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    data_source TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS measurements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    component_id TEXT NOT NULL,
+    timestamp_utc TEXT NOT NULL,
+    latency_ms REAL,
+    packet_loss_pct REAL,
+    throughput_mbps REAL,
+    connectivity_ok INTEGER NOT NULL,
+    data_source TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES runs (run_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_measurements_run_id ON measurements (run_id);
+CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs (created_at);
 """
 
 # ── Demo Data — 20 subscribers, 3 villages ───────────────────────────────────
@@ -135,6 +157,31 @@ DEMO_INCIDENTS: list[dict[str, Any]] = [
     }
 ]
 
+DEMO_RUNS: list[dict[str, Any]] = [
+    {
+        "run_id": "run-demo-001",
+        "data_source": "simulated",
+        "created_at": "2026-10-29T10:00:00Z",
+    }
+]
+
+DEMO_MEASUREMENTS: list[dict[str, Any]] = [
+    {"run_id": "run-demo-001", "component_id": "L1", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 2.1, "packet_loss_pct": 0.0, "throughput_mbps": 95.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L2", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 5.4, "packet_loss_pct": 0.0, "throughput_mbps": 50.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L3", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 180.0, "packet_loss_pct": 25.0, "throughput_mbps": 12.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L4", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 3.8, "packet_loss_pct": 0.0, "throughput_mbps": 48.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L5", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 4.1, "packet_loss_pct": 0.0, "throughput_mbps": 45.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L6", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 6.2, "packet_loss_pct": 0.0, "throughput_mbps": 50.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L7", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 7.0, "packet_loss_pct": 0.0, "throughput_mbps": 45.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L8", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 3.5, "packet_loss_pct": 0.0, "throughput_mbps": 48.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L9", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 4.0, "packet_loss_pct": 0.0, "throughput_mbps": 46.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L10", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 4.2, "packet_loss_pct": 0.0, "throughput_mbps": 45.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L11", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 5.8, "packet_loss_pct": 0.0, "throughput_mbps": 50.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L12", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 6.5, "packet_loss_pct": 0.0, "throughput_mbps": 45.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L13", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 3.9, "packet_loss_pct": 0.0, "throughput_mbps": 48.0, "connectivity_ok": 1, "data_source": "simulated"},
+    {"run_id": "run-demo-001", "component_id": "L14", "timestamp_utc": "2026-10-29T10:00:00Z", "latency_ms": 4.3, "packet_loss_pct": 0.0, "throughput_mbps": 46.0, "connectivity_ok": 1, "data_source": "simulated"},
+]
+
 
 def init_db(
     db_path: str | None = None,
@@ -178,6 +225,31 @@ def init_db(
                     """,
                     DEMO_INCIDENTS,
                 )
+
+                conn.executemany(
+                    """
+                    INSERT INTO runs (run_id, data_source, created_at)
+                    VALUES (:run_id, :data_source, :created_at)
+                    ON CONFLICT(run_id) DO NOTHING;
+                    """,
+                    DEMO_RUNS,
+                )
+
+                # Seed measurements if not present for run-demo-001
+                cur = conn.execute("SELECT COUNT(*) FROM measurements WHERE run_id = 'run-demo-001';")
+                if cur.fetchone()[0] == 0:
+                    conn.executemany(
+                        """
+                        INSERT INTO measurements (
+                            run_id, component_id, timestamp_utc, latency_ms, packet_loss_pct,
+                            throughput_mbps, connectivity_ok, data_source
+                        ) VALUES (
+                            :run_id, :component_id, :timestamp_utc, :latency_ms, :packet_loss_pct,
+                            :throughput_mbps, :connectivity_ok, :data_source
+                        );
+                        """,
+                        DEMO_MEASUREMENTS,
+                    )
 
             conn.commit()
     finally:

@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # Optional API key for POST /api/v1/measurements/ingest (header X-API-Key)
     ingest_api_key: str = ""
 
+    # --- Run Telemetry Retention (SQLite) ---
+    # Maximum number of past test runs and their measurements to retain in SQLite
+    runs_retention_limit: int = 1000
+
     @field_validator("sarvam_model", mode="before")
     @classmethod
     def _validate_sarvam_model(cls, v: object) -> str:
@@ -79,6 +83,20 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"SARVAM_TIMEOUT_SECONDS must be greater than zero; got {value!r}."
             )
+        return value
+
+    @field_validator("runs_retention_limit", mode="before")
+    @classmethod
+    def _validate_runs_retention_limit(cls, v: object) -> int:
+        """Reject non-positive retention limit values."""
+        try:
+            value = int(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"RUNS_RETENTION_LIMIT must be an integer; got {v!r}."
+            )
+        if value <= 0:
+            raise ValueError("RUNS_RETENTION_LIMIT must be greater than zero.")
         return value
 
     # Neo4j connection (used by the graph engine when configured)

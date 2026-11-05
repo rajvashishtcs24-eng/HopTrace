@@ -97,10 +97,10 @@ async def _streaming_loop() -> None:
             latest = engine.get_latest_open_incident()
             injected_measurements = None
             if latest and latest.status == "open" and latest.suspected_component_id:
-                # Fetch the run measurements that triggered this incident
+                # Fetch the run measurements that triggered this incident (reads from memory or SQLite)
                 run = None
-                if latest.run_id and latest.run_id in engine._runs:
-                    run = engine._runs[latest.run_id]
+                if latest.run_id:
+                    run = engine.get_run_measurements(latest.run_id)
                 if run:
                     injected_measurements = run.measurements
 
@@ -164,7 +164,10 @@ async def _streaming_loop() -> None:
                     "summary": latest.summary,
                     "confidence_score": latest.confidence_score,
                     "diagnostic_score": latest.diagnostic_score,
-                    "evidence": [e.model_dump() for e in (latest.evidence or [])],
+                    "evidence": [
+                        e.model_dump() if hasattr(e, "model_dump") else e
+                        for e in (latest.evidence or [])
+                    ],
                     "uncertainty_note": latest.uncertainty_note,
                     "created_at": latest.created_at,
                 }
