@@ -7,9 +7,10 @@ export default function AlertOverlay() {
   const activeIncident = useStore((s) => s.activeIncident);
   const affectedSubscribers = useStore((s) => s.affectedSubscribers);
 
-  const [isArmed, setIsArmed] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [alertOpen, setAlertOpen] = useState(false);
+  const isArmed = useStore((s) => s.alertArmed);
+  const isMuted = useStore((s) => s.voiceMuted);
+  const alertOpen = useStore((s) => s.alertOpen);
+  const setAlertOpen = useStore((s) => s.setAlertOpen);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isCollapsing, setIsCollapsing] = useState(false);
 
@@ -127,36 +128,6 @@ export default function AlertOverlay() {
 
   return (
     <>
-      {/* TopBar-adjacent Arm Demo & Mute Controls */}
-      <aside className="alert-demo-bar" aria-label="Demo Voice Controls">
-        <button
-          type="button"
-          className={`demo-chip ${isArmed ? 'armed' : ''}`}
-          onClick={() => setIsArmed((prev) => !prev)}
-          title="Arm audio for immediate playback on fault"
-        >
-          <span>{isArmed ? '● Armed' : '○ Arm Audio Demo'}</span>
-        </button>
-        <button
-          type="button"
-          className="demo-chip"
-          onClick={() => setIsMuted((prev) => !prev)}
-          title="Toggle Voice Mute"
-        >
-          <span>{isMuted ? '🔇 Muted' : '🔊 Voice On'}</span>
-        </button>
-        {activeIncident && !alertOpen && (
-          <button
-            type="button"
-            className="demo-chip"
-            onClick={() => setAlertOpen(true)}
-            title="Replay Alert Overlay"
-          >
-            <span>🚨 Replay Alert</span>
-          </button>
-        )}
-      </aside>
-
       {/* Main Alert Dialog Overlay */}
       {alertOpen && activeIncident && (
         <div

@@ -56,7 +56,35 @@ const useStore = create((set, get) => ({
 
   // ── All subscribers ─────────────────────────────────────────────────────
   allSubscribers: [],
-  setAllSubscribers: (subs) => set({ allSubscribers: subs }),
+  setAllSubscribers: (subs) => {
+    const AP_TO_VILLAGE = {
+      AP1: 'Rampur',
+      AP2: 'Rampur',
+      AP3: 'Bhatpur',
+      AP4: 'Bhatpur',
+      AP5: 'Daulatpur',
+      AP6: 'Daulatpur',
+    };
+    const enriched = (subs || []).map((s) => {
+      const ap = s.access_point_id || s.ap_id;
+      const village = s.village || (ap ? AP_TO_VILLAGE[ap] : null);
+      return {
+        ...s,
+        ap_id: ap,
+        access_point_id: ap,
+        ...(village ? { village } : {}),
+      };
+    });
+    set({ allSubscribers: enriched });
+  },
+
+  // ── Alert overlay & voice demo controls ─────────────────────────────────
+  alertArmed: true,
+  voiceMuted: false,
+  alertOpen: false,
+  setAlertArmed: (v) => set(typeof v === 'function' ? s => ({ alertArmed: v(s.alertArmed) }) : { alertArmed: v }),
+  setVoiceMuted: (v) => set(typeof v === 'function' ? s => ({ voiceMuted: v(s.voiceMuted) }) : { voiceMuted: v }),
+  setAlertOpen: (v) => set(typeof v === 'function' ? s => ({ alertOpen: v(s.alertOpen) }) : { alertOpen: v }),
 
   // ── Villages ────────────────────────────────────────────────────────────
   villages: [],

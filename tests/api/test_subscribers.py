@@ -131,6 +131,8 @@ def test_subscriber_field_names_and_types(client: TestClient, isolated_db: str) 
         "status": str,
         "payment_status": str,
         "due_date": str,
+        "phone": (str, type(None)),
+        "preferred_language": (str, type(None)),
     }
 
     response = client.get("/api/v1/subscribers")

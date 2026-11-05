@@ -16,7 +16,7 @@ def list_subscribers(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Fetch all subscribers ordered by ID."""
     cursor = conn.execute(
         """
-        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date
+        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date, phone, preferred_language
         FROM subscribers
         ORDER BY id ASC;
         """
@@ -28,7 +28,7 @@ def get_subscriber(conn: sqlite3.Connection, subscriber_id: str) -> dict[str, An
     """Fetch a single subscriber by ID, or None if not found."""
     cursor = conn.execute(
         """
-        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date
+        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date, phone, preferred_language
         FROM subscribers
         WHERE id = ?;
         """,
@@ -48,7 +48,7 @@ def get_subscribers_by_access_points(
     placeholders = ",".join("?" for _ in access_point_ids)
     cursor = conn.execute(
         f"""
-        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date
+        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date, phone, preferred_language
         FROM subscribers
         WHERE access_point_id IN ({placeholders})
         ORDER BY id ASC;
@@ -68,7 +68,7 @@ def get_subscribers_by_ids(
     placeholders = ",".join("?" for _ in subscriber_ids)
     cursor = conn.execute(
         f"""
-        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date
+        SELECT id, display_name, plan, plan_price, access_point_id, status, payment_status, due_date, phone, preferred_language
         FROM subscribers
         WHERE id IN ({placeholders})
         ORDER BY id ASC;

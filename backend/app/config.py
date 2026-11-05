@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     # Fraction of monthly plan price credited per hour of outage (e.g. 0.02 = 2% per hour)
     sla_credit_rate_per_hour: float = 0.02
 
+    # --- Notification Provider ---
+    # "unavailable" – default honest behavior (returns 503)
+    # "console"     – demo provider logging notifications
+    # "twilio"      – Twilio SMS / WhatsApp delivery
+    notification_provider: str = "unavailable"
+
+    # --- Twilio (used when NOTIFICATION_PROVIDER=twilio) ---
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_whatsapp_from_number: str = ""
+
     @field_validator("sarvam_model", mode="before")
     @classmethod
     def _validate_sarvam_model(cls, v: object) -> str:
