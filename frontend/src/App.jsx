@@ -11,6 +11,7 @@ import AIExplanationCard from './components/AIExplanationCard';
 import TelemetryCharts from './components/TelemetryCharts';
 import SubscriberOps from './components/SubscriberOps';
 import LabPanel from './components/LabPanel';
+import BusinessImpactPanel from './components/BusinessImpactPanel';
 import SarvamKeyModal from './components/SarvamKeyModal';
 import ToastStack from './components/ToastStack';
 import AlertOverlay from './components/AlertOverlay/AlertOverlay';
@@ -22,6 +23,7 @@ export default function App() {
   const [sarvamOpen, setSarvamOpen] = useState(false);
   const selectedElement = useStore(s => s.selectedElement);
   const setSelectedElement = useStore(s => s.setSelectedElement);
+  const dashboardMode = useStore(s => s.dashboardMode);
 
   useEffect(() => {
     fetchAll();
@@ -62,11 +64,21 @@ export default function App() {
           <LabPanel />
         </section>
 
-        {/* Right panel: Incident + AI + Charts */}
+        {/* Right panel: Incident + AI + Charts (NOC) / Business Impact + Incident + AI (Business) */}
         <section className="col-span-12 lg:col-span-4 flex flex-col gap-2.5 min-h-0">
-          <IncidentPanel />
-          <AIExplanationCard />
-          <TelemetryCharts />
+          {dashboardMode === 'business' ? (
+            <>
+              <BusinessImpactPanel />
+              <IncidentPanel />
+              <AIExplanationCard />
+            </>
+          ) : (
+            <>
+              <IncidentPanel />
+              <AIExplanationCard />
+              <TelemetryCharts />
+            </>
+          )}
         </section>
 
         {/* Full-width: Subscriber Ops */}

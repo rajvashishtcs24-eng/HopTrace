@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # Maximum number of past test runs and their measurements to retain in SQLite
     runs_retention_limit: int = 1000
 
+    # --- Business Impact & SLA Credits ---
+    # Fraction of monthly plan price credited per hour of outage (e.g. 0.02 = 2% per hour)
+    sla_credit_rate_per_hour: float = 0.02
+
     @field_validator("sarvam_model", mode="before")
     @classmethod
     def _validate_sarvam_model(cls, v: object) -> str:
@@ -98,6 +102,20 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("RUNS_RETENTION_LIMIT must be greater than zero.")
         return value
+
+    @field_validator("sla_credit_rate_per_hour", mode="before")
+    @classmethod
+    def _validate_sla_credit_rate(cls, v: object) -> float:
+        """Ensure sla_credit_rate_per_hour is non-negative."""
+        try:
+            val = float(v)
+            if val < 0.0:
+                raise ValueError
+            return val
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"SLA_CREDIT_RATE_PER_HOUR must be a non-negative number; got {v!r}."
+            )
 
     # Neo4j connection (used by the graph engine when configured)
     neo4j_uri: str = "bolt://localhost:7687"

@@ -149,6 +149,10 @@ export function useApi() {
     return result;
   }, [store]);
 
+  const fetchBusinessImpact = useCallback(async (incidentId) => {
+    return api(`/incidents/${incidentId}/business-impact`);
+  }, []);
+
   return {
     fetchAll,
     runScenario,
@@ -157,5 +161,6 @@ export function useApi() {
     sendReminder,
     fetchLinkHistory,
     fetchRiskSnapshot,
+    fetchBusinessImpact,
   };
 }

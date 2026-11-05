@@ -15,6 +15,7 @@ class SubscriberItem(BaseModel):
     id: str = Field(..., description="Unique subscriber identifier (e.g. SUB101)")
     display_name: str = Field(..., description="Subscriber name / label")
     plan: str = Field(..., description="Subscription plan name")
+    plan_price: float = Field(default=399.0, description="Monthly plan price in INR")
     access_point_id: str = Field(..., description="ID of connected access point")
     status: str = Field(..., description="Subscriber status (e.g. active, suspended)")
     payment_status: str = Field(..., description="Payment status (e.g. paid, overdue, pending)")
