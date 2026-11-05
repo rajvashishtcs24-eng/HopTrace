@@ -42,9 +42,9 @@ export default function KPIRibbon() {
   const collectionRate = totalSubs > 0 ? Math.round((paidCount / totalSubs) * 100) : 100;
 
   const villageStatuses = villages.length > 0 ? villages : [
-    { name: 'Rampur', health: 'healthy' },
-    { name: 'Bhatpur', health: 'healthy' },
-    { name: 'Daulatpur', health: 'healthy' },
+    { name: 'Rampur', status: 'healthy', health: 'healthy' },
+    { name: 'Bhatpur', status: 'healthy', health: 'healthy' },
+    { name: 'Daulatpur', status: 'healthy', health: 'healthy' },
   ];
 
   const villageHealthColor = (h) =>
@@ -72,12 +72,12 @@ export default function KPIRibbon() {
       <KPICard
         accent="purple"
         title="Village Network Status"
-        value={villageStatuses.filter(v => v.health === 'healthy').length + '/' + villageStatuses.length + ' Healthy'}
+        value={villageStatuses.filter(v => (v.status || v.health) === 'healthy').length + '/' + villageStatuses.length + ' Healthy'}
       >
         <div className="flex items-center gap-2 mt-0.5">
           {villageStatuses.map(v => (
-            <div key={v.name} className="flex items-center gap-1">
-              <span className={`w-2 h-2 rounded-full ${villageHealthColor(v.health)}`} />
+            <div key={v.name || v.village_id} className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full ${villageHealthColor(v.status || v.health)}`} />
               <span className="text-[10px] text-slate-400">{v.name}</span>
             </div>
           ))}
