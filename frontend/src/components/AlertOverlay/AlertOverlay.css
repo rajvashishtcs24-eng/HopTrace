@@ -157,16 +157,7 @@
   background: #475569;
 }
 
-/* Persistent Demo Arming Header Chip */
-.alert-demo-bar {
-  position: fixed;
-  top: 14px;
-  right: 180px;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Demo Arming Header Chip */
 
 .demo-chip {
   padding: 4px 10px;

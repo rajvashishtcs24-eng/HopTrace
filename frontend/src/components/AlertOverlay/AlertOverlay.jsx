@@ -47,7 +47,7 @@ export default function AlertOverlay() {
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [activeIncidentId]);
+  }, [activeIncidentId, setAlertOpen]);
 
   // Collapse and scroll smoothly to the incident panel
   const handleDismiss = useCallback(() => {
@@ -61,7 +61,7 @@ export default function AlertOverlay() {
         panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 320);
-  }, []);
+  }, [setAlertOpen]);
 
   // Voice playback & auto-dismiss timer on alert activation
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import useStore from '../../store/appStore';
 import { useApi } from '../../hooks/useApi';
 
@@ -7,34 +7,35 @@ export default function BusinessImpactPanel() {
   const allSubscribers = useStore(s => s.allSubscribers);
   const { fetchBusinessImpact, sendReminder } = useApi();
 
-  const [impactData, setImpactData] = useState(null);
+  const [rawImpactData, setImpactData] = useState(null);
+  const impactData = activeIncident ? rawImpactData : null;
   const [loading, setLoading] = useState(false);
   const [reminderStates, setReminderStates] = useState({});
   const [bulkSending, setBulkSending] = useState(false);
 
-  const loadImpact = useCallback(async (incidentId) => {
+  useEffect(() => {
+    const incidentId = activeIncident?.id;
     if (!incidentId) {
-      setImpactData(null);
       return;
     }
-    setLoading(true);
-    try {
-      const data = await fetchBusinessImpact(incidentId);
-      setImpactData(data);
-    } catch {
-      setImpactData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchBusinessImpact]);
-
-  useEffect(() => {
-    if (activeIncident?.id) {
-      loadImpact(activeIncident.id);
-    } else {
-      setImpactData(null);
-    }
-  }, [activeIncident?.id, loadImpact]);
+    let ignore = false;
+    fetchBusinessImpact(incidentId)
+      .then((data) => {
+        if (!ignore) {
+          setImpactData(data);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setImpactData(null);
+          setLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [activeIncident?.id, fetchBusinessImpact]);
 
   const handleSendReminder = async (subId) => {
     setReminderStates(prev => ({ ...prev, [subId]: 'sending' }));

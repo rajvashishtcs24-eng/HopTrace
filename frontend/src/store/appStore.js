@@ -101,10 +101,13 @@ const useStore = create((set, get) => ({
   setIsPlayingAudio: (v) => set({ isPlayingAudio: v }),
 
   // ── Sarvam config ───────────────────────────────────────────────────────
-  sarvamApiKey: localStorage.getItem('ht_sarvam_key') || '',
+  sarvamApiKey: (typeof localStorage !== 'undefined' ? localStorage.getItem('ht_sarvam_key') : '') || '',
   sarvamLanguage: 'hi',
   sarvamSpeaker: 'meera',
-  setSarvamKey: (k) => { localStorage.setItem('ht_sarvam_key', k); set({ sarvamApiKey: k }); },
+  setSarvamKey: (k) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('ht_sarvam_key', k);
+    set({ sarvamApiKey: k });
+  },
   setSarvamLanguage: (l) => set({ sarvamLanguage: l }),
   setSarvamSpeaker: (s) => set({ sarvamSpeaker: s }),
 
@@ -113,8 +116,11 @@ const useStore = create((set, get) => ({
   setSelectedElement: (el) => set({ selectedElement: el }),
 
   // ── UI mode ─────────────────────────────────────────────────────────────
-  dashboardMode: localStorage.getItem('ht_mode') || 'noc',  // noc | business
-  setDashboardMode: (m) => { localStorage.setItem('ht_mode', m); set({ dashboardMode: m }); },
+  dashboardMode: (typeof localStorage !== 'undefined' ? localStorage.getItem('ht_mode') : '') || 'noc',  // noc | business
+  setDashboardMode: (m) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('ht_mode', m);
+    set({ dashboardMode: m });
+  },
 
   // ── Toast ───────────────────────────────────────────────────────────────
   toasts: [],

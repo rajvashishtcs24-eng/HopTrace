@@ -4,6 +4,7 @@ import { useLiveTelemetry } from './hooks/useLiveTelemetry';
 import { useApi } from './hooks/useApi';
 
 import TopBar from './components/TopBar';
+import NetworkStatusBanner from './components/NetworkStatusBanner';
 import KPIRibbon from './components/KPIRibbon';
 import NetworkView from './components/NetworkView';
 import IncidentPanel from './components/IncidentPanel';
@@ -35,6 +36,9 @@ export default function App() {
       {/* ── Top Bar ──────────────────────────────────────────────────── */}
       <TopBar onOpenSarvam={() => setSarvamOpen(true)} onRefresh={fetchAll} />
 
+      {/* ── Network Health Single Source Status Banner ──────────────── */}
+      <NetworkStatusBanner />
+
       {/* ── KPI Ribbon ───────────────────────────────────────────────── */}
       <KPIRibbon />
 
@@ -45,7 +49,7 @@ export default function App() {
         <section className="col-span-12 lg:col-span-8 flex flex-col gap-2.5 min-h-0">
           <div
             className="flex-1 relative"
-            style={{ minHeight: 480 }}
+            style={{ height: '60vh', minHeight: 520 }}
           >
             {/* Card wrapper */}
             <div className="absolute inset-0 bg-[#0a1628] border border-slate-800 rounded-xl overflow-hidden flex flex-col">
