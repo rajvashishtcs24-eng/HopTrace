@@ -208,6 +208,19 @@ export function useApi() {
     return api(`/topology/sla?window_hours=${windowHours}`);
   }, []);
 
+  const fetchNotificationStatus = useCallback(async () => {
+    try {
+      return await api('/notifications/status');
+    } catch {
+      return {
+        available: false,
+        provider: 'unavailable',
+        reason:
+          'Outage notification provider is not configured. Set NOTIFICATION_PROVIDER=console or twilio.',
+      };
+    }
+  }, []);
+
   const runPathProbe = useCallback(async (failedNodeId = 'WB3') => {
     store.setLoading(true);
     try {
@@ -274,6 +287,7 @@ export function useApi() {
     fetchAgentStatus,
     runPathProbe,
     notifyIncident,
+    fetchNotificationStatus,
     fetchSla,
   };
 }

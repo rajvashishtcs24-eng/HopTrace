@@ -57,7 +57,11 @@ export default function NetworkStatusBanner() {
       });
 
     // 2. Fetch notification provider availability
-    fetchNotificationStatus()
+    const statusPromise = typeof fetchNotificationStatus === 'function'
+      ? fetchNotificationStatus()
+      : Promise.resolve({ available: false, reason: 'Notification provider unavailable.' });
+
+    statusPromise
       .then((status) => {
         if (!ignore) setProviderStatus(status);
       })
