@@ -127,7 +127,7 @@ def test_mid_run_neo4j_failure_falls_back_without_500(monkeypatch):
     assert topo is not None
     assert len(topo.nodes) > 0
     assert engine._neo4j_fallback is True
-    assert "Driver socket reset by peer" in (engine._neo4j_last_error or "")
+    assert "Neo4j unreachable" in (engine._neo4j_last_error or "")
 
     # Status endpoint reflects fallback
     client = TestClient(app)
@@ -141,23 +141,26 @@ def test_mid_run_neo4j_failure_falls_back_without_500(monkeypatch):
 
 
 def test_sanitize_last_error_removes_uri_user_password():
-    """sanitize_last_error ensures no URI, username, or password appears in error messages."""
-    raw_error = (
-        "Failed to establish connection to neo4j+s://admin_user:super_secret_p@wd123@db77.databases.neo4j.io:7687: "
-        "authentication failed for user 'admin_user'."
-    )
-    cleaned = sanitize_last_error(
-        raw_error,
-        password="super_secret_p@wd123",
-        username="admin_user",
-        uri="neo4j+s://admin_user:super_secret_p@wd123@db77.databases.neo4j.io:7687",
-    )
+    """sanitize_last_error returns generic message with error class only, no host/port/creds."""
+    timeout_err = "Timed out trying to establish connection to 127.0.0.1:7687"
+    auth_err = "Authentication failed for user 'admin' at neo4j+s://secret@db.io:7687"
+    refused_err = "Connection refused to bolt://192.168.1.1:7687"
 
-    assert "super_secret_p@wd123" not in cleaned
-    assert "admin_user" not in cleaned
-    assert "db77.databases.neo4j.io" not in cleaned
-    assert "neo4j+s://" not in cleaned
-    assert "[REDACTED_URI]" in cleaned or "***" in cleaned
+    s_timeout = sanitize_last_error(timeout_err)
+    s_auth = sanitize_last_error(auth_err)
+    s_refused = sanitize_last_error(refused_err)
+
+    assert s_timeout == "Neo4j unreachable (timeout)"
+    assert s_auth == "Neo4j authentication failed (AuthError)"
+    assert s_refused == "Neo4j unreachable (ConnectionRefused)"
+
+    for err in (s_timeout, s_auth, s_refused):
+        assert "127.0.0.1" not in err
+        assert "7687" not in err
+        assert "admin" not in err
+        assert "secret" not in err
+        assert "bolt://" not in err
+        assert "neo4j+s://" not in err
 
 
 def test_get_graph_status_endpoint_offline(monkeypatch):

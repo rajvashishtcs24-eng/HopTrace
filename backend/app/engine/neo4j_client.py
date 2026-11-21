@@ -72,32 +72,29 @@ def sanitize_last_error(
     username: Optional[str] = None,
     uri: Optional[str] = None,
 ) -> str:
-    """Strips URI, username, and password from error messages for public status display.
+    """Returns a generic error summary for public status display (no host, port, user, or password).
 
-    Guarantees no raw connection URI, username, or password is leaked in GET /graph/status.
+    Keeps full details strictly in server-side logs.
+    Examples:
+      - "Neo4j unreachable (timeout)"
+      - "Neo4j unreachable (ServiceUnavailable)"
+      - "Neo4j authentication failed (AuthError)"
     """
     if not error:
         return ""
-    msg = str(error)
-    pw = password or (client.password if client else None)
-    user = username or (client.username if client else None)
-    target_uri = uri or (client.uri if client else None)
-    sanitized_uri = client.sanitized_uri if client else None
+    err_str = str(error).lower()
+    err_class = error.__class__.__name__ if isinstance(error, Exception) else "ConnectionError"
 
-    if pw and pw in msg:
-        msg = msg.replace(pw, "***")
-    if user and user in msg:
-        msg = msg.replace(user, "***")
-    if target_uri and target_uri in msg:
-        msg = msg.replace(target_uri, "[REDACTED_URI]")
-    if sanitized_uri and sanitized_uri in msg:
-        msg = msg.replace(sanitized_uri, "[REDACTED_URI]")
+    if "timed out" in err_str or "timeout" in err_str:
+        return "Neo4j unreachable (timeout)"
+    if "auth" in err_str or err_class == "AuthError":
+        return "Neo4j authentication failed (AuthError)"
+    if "serviceunavailable" in err_str or err_class == "ServiceUnavailable":
+        return "Neo4j unreachable (ServiceUnavailable)"
+    if "connection refused" in err_str or "refused" in err_str:
+        return "Neo4j unreachable (ConnectionRefused)"
 
-    # Strip any lingering protocol://host:port URIs
-    msg = re.sub(r"[a-zA-Z0-9+.-]+://[^\s'\"]+", "[REDACTED_URI]", msg)
-    # Strip any user '...' occurrences
-    msg = re.sub(r"user '([^']+)'", "user '***'", msg)
-    return msg
+    return f"Neo4j unreachable ({err_class})"
 
 
 class Neo4jClient:
