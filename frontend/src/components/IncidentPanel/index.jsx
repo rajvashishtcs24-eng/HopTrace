@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import useStore from '../../store/appStore';
 import { useApi } from '../../hooks/useApi';
 import HopTraceStrip from './HopTraceStrip';
+// Track N: Graph Intelligence card
+import GraphCard from '../GraphCard';
 // M3: Subscriber notification panel integration
 import NotifyPanel from '../Notify';
 
@@ -372,6 +374,11 @@ export default function IncidentPanel() {
             `🤖 Explain in ${sarvamLanguage.toUpperCase()} via Sarvam AI`
           )}
         </button>
+      </div>
+
+      {/* Track N: Graph Intelligence card (blast radius, path, history, Cypher queries) */}
+      <div className="px-3 pb-2">
+        <GraphCard incidentId={activeIncident?.id} />
       </div>
 
       {/* M3: Incident subscriber notifications panel */}

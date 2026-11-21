@@ -27,8 +27,13 @@ export default function SubscriberPreview({
     <div className="space-y-2">
       {/* Header with selection controls */}
       <div className="flex items-center justify-between px-1">
-        <div className="text-xs font-semibold text-slate-300">
-          Target Subscribers ({selectedIds.size}/{previews.length} selected)
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-300">
+            Target Subscribers ({selectedIds.size}/{previews.length} selected)
+          </span>
+          <span className="text-[10px] bg-indigo-950/80 border border-indigo-700/60 text-indigo-300 px-1.5 py-0.5 rounded font-medium">
+            Recipients from graph query
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button

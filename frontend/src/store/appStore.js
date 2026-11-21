@@ -24,8 +24,10 @@ const useStore = create((set, get) => ({
   // ── Backend connection ──────────────────────────────────────────────────
   backendOnline: false,
   wsConnected: false,
+  graphStatus: null, // { backend: 'neo4j'|'memory', fallback: bool, latency_ms: number, last_error: string }
   setBackendOnline: (v) => set({ backendOnline: v }),
   setWsConnected: (v) => set({ wsConnected: v }),
+  setGraphStatus: (status) => set({ graphStatus: status }),
 
   // ── Topology ────────────────────────────────────────────────────────────
   topology: { nodes: [], links: [], data_source: 'loading' },

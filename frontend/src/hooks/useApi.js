@@ -84,6 +84,10 @@ export function useApi() {
         store.setActiveIncident(null);
         store.setAffectedSubscribers([]);
       }
+
+      // Track N: Graph backend status
+      const graphStatus = await api('/graph/status').catch(() => null);
+      if (graphStatus) store.setGraphStatus(graphStatus);
     } catch (e) {
       store.addToast(`Sync error: ${e.message}`, 'error');
     } finally {
@@ -221,6 +225,21 @@ export function useApi() {
     }
   }, []);
 
+  const fetchGraphStatus = useCallback(async () => {
+    try {
+      const status = await api('/graph/status');
+      if (status) store.setGraphStatus(status);
+      return status;
+    } catch {
+      return { backend: 'memory', fallback: false, reason: 'unreachable' };
+    }
+  }, [store]);
+
+  const fetchIncidentGraph = useCallback(async (incidentId) => {
+    if (!incidentId) return null;
+    return api(`/incidents/${incidentId}/graph`).catch(() => null);
+  }, []);
+
   const runPathProbe = useCallback(async (failedNodeId = 'WB3') => {
     store.setLoading(true);
     try {
@@ -288,6 +307,8 @@ export function useApi() {
     runPathProbe,
     notifyIncident,
     fetchNotificationStatus,
+    fetchGraphStatus,
+    fetchIncidentGraph,
     fetchSla,
   };
 }

@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import useStore from '../store/appStore';
+import { useApi } from '../hooks/useApi';
 
 const LANG_OPTIONS = [
   { code: 'hi', label: 'हिंदी' },
@@ -33,6 +35,14 @@ export default function TopBar({ onRefresh }) {
   const setVoiceMuted = useStore(s => s.setVoiceMuted);
   const alertOpen = useStore(s => s.alertOpen);
   const setAlertOpen = useStore(s => s.setAlertOpen);
+  const graphStatus = useStore(s => s.graphStatus);
+
+  const { fetchGraphStatus } = useApi();
+  useEffect(() => {
+    fetchGraphStatus();
+    const interval = setInterval(fetchGraphStatus, 30000);
+    return () => clearInterval(interval);
+  }, [fetchGraphStatus]);
 
   const isLive =
     telemetryDataSource === 'live' ||
@@ -178,6 +188,42 @@ export default function TopBar({ onRefresh }) {
       <div className={`flex items-center gap-1 text-xs ${backendOnline ? 'text-emerald-400' : 'text-red-400'}`}>
         <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-400' : 'bg-red-500'}`} />
         <span className="hidden sm:inline">API</span>
+      </div>
+
+      {/* Track N: Neo4j / Graph Backend Status Chip */}
+      <div
+        data-testid="neo4j-status-chip"
+        className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-colors ${
+          graphStatus?.backend === 'neo4j' && !graphStatus?.fallback
+            ? 'border-emerald-700 bg-emerald-950/70 text-emerald-300'
+            : graphStatus?.fallback
+            ? 'border-amber-700 bg-amber-950/70 text-amber-300'
+            : 'border-slate-700 bg-slate-900/80 text-slate-300'
+        }`}
+        title={
+          graphStatus?.backend === 'neo4j' && !graphStatus?.fallback
+            ? `Neo4j connected (${graphStatus?.latency_ms ?? 0}ms)`
+            : graphStatus?.fallback
+            ? `Fallback: in-memory (${graphStatus?.last_error || 'unreachable'})`
+            : 'Graph: in-memory store'
+        }
+      >
+        <span
+          className={`w-2 h-2 rounded-full ${
+            graphStatus?.backend === 'neo4j' && !graphStatus?.fallback
+              ? 'bg-emerald-400 animate-pulse'
+              : graphStatus?.fallback
+              ? 'bg-amber-400'
+              : 'bg-cyan-400'
+          }`}
+        />
+        <span className="hidden sm:inline font-medium">
+          {graphStatus?.backend === 'neo4j' && !graphStatus?.fallback
+            ? 'Neo4j connected'
+            : graphStatus?.fallback
+            ? 'Fallback: in-memory'
+            : 'In-memory graph'}
+        </span>
       </div>
 
       {/* Demo Voice & Alert Controls */}
