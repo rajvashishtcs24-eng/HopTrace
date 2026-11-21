@@ -110,3 +110,35 @@ async def require_agent_key(
         )
 
     return True
+
+
+async def require_agent_or_rbac(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> dict[str, Any]:
+    """
+    Unified dependency for agents, measurements, and probes routers:
+    - POST requests: require a valid X-API-Key matching ingest_api_key.
+    - All other requests (GET/HEAD): require a valid Bearer token via enforce_rbac (viewer/operator).
+    Bypassed when auth_disabled=True.
+    """
+    if getattr(settings, "auth_disabled", False):
+        return {"username": "operator", "role": "operator"}
+
+    if request.method == "POST":
+        expected_key = getattr(settings, "ingest_api_key", "").strip()
+        if not expected_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Ingest API key is not configured on server",
+            )
+        if not x_api_key or not hmac.compare_digest(x_api_key, expected_key):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing X-API-Key header",
+            )
+        return {"username": "agent", "role": "agent"}
+
+    user = await get_current_user(credentials)
+    return await enforce_rbac(request, user)

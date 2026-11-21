@@ -10,7 +10,7 @@ from typing import Any
 
 from datetime import datetime, timezone
 from app.config import settings
-from app.auth.security import hash_password
+from app.auth.security import hash_password, verify_password
 from app.db.connection import get_db_connection
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
@@ -307,32 +307,25 @@ def init_db(
                     )
 
             # Seed users if configured in environment settings
+        users_specs = [
+            ("usr-operator", "operator", getattr(settings, "operator_password", ""), "operator"),
+            ("usr-viewer", "viewer", getattr(settings, "viewer_password", ""), "viewer"),
+            ("usr-evaluator", "evaluator", getattr(settings, "evaluator_password", ""), "operator"),
+        ]
         users_to_seed = []
         now_iso = datetime.now(timezone.utc).isoformat()
-        if getattr(settings, "operator_password", ""):
-            users_to_seed.append((
-                "usr-operator",
-                "operator",
-                hash_password(settings.operator_password),
-                "operator",
-                now_iso,
-            ))
-        if getattr(settings, "viewer_password", ""):
-            users_to_seed.append((
-                "usr-viewer",
-                "viewer",
-                hash_password(settings.viewer_password),
-                "viewer",
-                now_iso,
-            ))
-        if getattr(settings, "evaluator_password", ""):
-            users_to_seed.append((
-                "usr-evaluator",
-                "evaluator",
-                hash_password(settings.evaluator_password),
-                "operator",
-                now_iso,
-            ))
+
+        for uid, uname, pwd, role in users_specs:
+            if not pwd:
+                continue
+            cur = conn.execute("SELECT password_hash, role FROM users WHERE username = ?", (uname,))
+            row = cur.fetchone()
+            if row is not None:
+                existing_hash, existing_role = row[0], row[1]
+                if verify_password(pwd, existing_hash) and existing_role == role:
+                    # Skip upsert when password and role already match
+                    continue
+            users_to_seed.append((uid, uname, hash_password(pwd), role, now_iso))
 
         if users_to_seed:
             conn.executemany(

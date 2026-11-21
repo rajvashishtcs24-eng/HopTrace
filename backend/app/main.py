@@ -30,7 +30,7 @@ from app.api.topology import router as topology_router
 from app.api.topology_v2 import router as topology_v2_router
 from fastapi import Depends
 from app.api.auth import router as auth_router
-from app.auth.deps import enforce_rbac, require_agent_key
+from app.auth.deps import enforce_rbac, require_agent_or_rbac
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.config import settings
 from app.db.init import init_db
@@ -39,8 +39,12 @@ from app.db.init import init_db
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context: initialize database, graph engine, and streaming loop."""
-    if not settings.auth_disabled and not getattr(settings, "auth_secret", "").strip():
-        raise RuntimeError("AUTH_DISABLED is false but AUTH_SECRET is not configured.")
+    if not settings.auth_disabled:
+        secret = getattr(settings, "auth_secret", "").strip()
+        if len(secret) < 32:
+            raise RuntimeError("AUTH_DISABLED is false but AUTH_SECRET is shorter than 32 characters.")
+        if not getattr(settings, "ingest_api_key", "").strip():
+            raise RuntimeError("AUTH_DISABLED is false but INGEST_API_KEY is not configured.")
     # Initialize SQLite
     init_db(
         db_path=settings.sqlite_db_path,
@@ -102,9 +106,20 @@ class WebSocketAuthMiddleware:
                 token = token_list[0] if token_list else None
                 user = decode_access_token(token, getattr(settings, "auth_secret", ""))
                 if user is None:
-                    await send({"type": "websocket.close", "code": 4001, "reason": "Unauthorized"})
+                    await send({"type": "websocket.close", "code": 1008, "reason": "Policy Violation: Unauthorized"})
                     return
         await self.app(scope, receive, send)
+
+
+from fastapi import Request, Response
+
+@app.middleware("http")
+async def disable_docs_when_auth_enabled(request: Request, call_next):
+    """When auth is enabled, disable access to /docs, /redoc, and /openapi.json."""
+    if not getattr(settings, "auth_disabled", False):
+        if request.url.path in ("/docs", "/redoc", "/openapi.json"):
+            return Response(status_code=404, content="Not Found")
+    return await call_next(request)
 
 
 app.add_middleware(WebSocketAuthMiddleware)
@@ -119,9 +134,13 @@ app.include_router(health_router,        tags=["health"])
 app.include_router(auth_router,          prefix=API_PREFIX, tags=["auth"])
 
 # Agent endpoints (authenticated via X-API-Key == ingest_api_key)
-app.include_router(measurements_router,  prefix=API_PREFIX, tags=["measurements"], dependencies=[Depends(require_agent_key)])
-app.include_router(probes_router,        prefix=API_PREFIX, tags=["probes"], dependencies=[Depends(require_agent_key)])
-app.include_router(agents_router,        prefix=API_PREFIX, tags=["agents"], dependencies=[Depends(require_agent_key)])
+# --- M4 public router (public) ---
+
+# Agent & Ingest endpoints (POST requires valid X-API-Key; all other methods require enforce_rbac)
+app.include_router(measurements_router,  prefix=API_PREFIX, tags=["measurements"], dependencies=[Depends(require_agent_or_rbac)])
+app.include_router(measurements_router,  prefix=API_PREFIX + "/measurements", tags=["measurements"], dependencies=[Depends(require_agent_or_rbac)])
+app.include_router(probes_router,        prefix=API_PREFIX, tags=["probes"], dependencies=[Depends(require_agent_or_rbac)])
+app.include_router(agents_router,        prefix=API_PREFIX, tags=["agents"], dependencies=[Depends(require_agent_or_rbac)])
 
 # Protected endpoints (GET/HEAD: viewer | operator; Modifications: operator only)
 app.include_router(topology_router,      prefix=API_PREFIX, tags=["topology"], dependencies=[Depends(enforce_rbac)])
@@ -130,6 +149,8 @@ app.include_router(subscribers_router,   prefix=API_PREFIX, tags=["subscribers"]
 app.include_router(incidents_router,     prefix=API_PREFIX, tags=["incidents"], dependencies=[Depends(enforce_rbac)])
 app.include_router(lab_router,           prefix=API_PREFIX, tags=["lab"], dependencies=[Depends(enforce_rbac)])
 app.include_router(explanations_router,  prefix=API_PREFIX, tags=["explanations"], dependencies=[Depends(enforce_rbac)])
+
+# --- M3 notify router (protected: enforce_rbac) ---
 
 # Realtime WebSocket
 app.include_router(telemetry_ws_router,  prefix=API_PREFIX, tags=["telemetry"])

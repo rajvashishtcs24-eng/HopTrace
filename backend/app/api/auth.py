@@ -20,19 +20,28 @@ from app.db.connection import get_db
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # ── Stricter per-IP Rate Limiting for Login ──────────────────────────────────
-_login_attempts: dict[str, collections.deque[float]] = collections.defaultdict(collections.deque)
+_login_attempts: dict[tuple[str, str], collections.deque[float]] = collections.defaultdict(collections.deque)
 
 
-def _check_login_rate_limit(request: Request) -> None:
+def reset_login_rate_limits() -> None:
+    """Clear in-memory login rate limit tracking (used by tests)."""
+    _login_attempts.clear()
+
+
+def _check_login_rate_limit(request: Request, username: str) -> None:
     limit = getattr(settings, "login_rate_limit_per_minute", 10)
     if limit <= 0:
         return
 
-    forwarded = request.headers.get("X-Forwarded-For")
-    ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+    # Only honor X-Forwarded-For if TRUSTED_PROXY is explicitly enabled
+    if getattr(settings, "trusted_proxy", False) and request.headers.get("X-Forwarded-For"):
+        ip = request.headers["X-Forwarded-For"].split(",")[0].strip()
+    else:
+        ip = request.client.host if request.client else "unknown"
 
+    key = (ip, username.strip())
     now = time.time()
-    q = _login_attempts[ip]
+    q = _login_attempts[key]
 
     # Purge timestamps older than 60s
     while q and now - q[0] > 60.0:
@@ -78,7 +87,7 @@ async def login(
     Authenticate with username and password. Returns signed bearer token.
     Enforces per-IP rate limiting and timing-attack protections.
     """
-    _check_login_rate_limit(request)
+    _check_login_rate_limit(request, req.username)
 
     cur = db.execute(
         "SELECT id, username, password_hash, role FROM users WHERE username = ?",

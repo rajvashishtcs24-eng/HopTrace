@@ -5,7 +5,7 @@ Settings are read from environment variables (and from a .env file when
 python-dotenv is present).  Defaults are safe for local development.
 Never put real credentials here; use a .env file that is git-ignored.
 """
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,14 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_empty_strings(cls, data: object) -> object:
+        """Coerce empty strings in env configuration to omitted so field defaults apply."""
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v != ""}
+        return data
 
     # --- API ---
     app_version: str = "0.1.0"
@@ -28,6 +36,7 @@ class Settings(BaseSettings):
     viewer_password: str = ""
     evaluator_password: str = ""
     login_rate_limit_per_minute: int = 10
+    trusted_proxy: bool = False
 
     # --- CORS ---
     # Comma-separated list of allowed origins for CORS.

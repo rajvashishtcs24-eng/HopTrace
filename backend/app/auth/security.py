@@ -105,8 +105,8 @@ def create_access_token(
     Create a signed HMAC-SHA256 bearer token with expiration.
     Returns (token_string, expires_at_iso_utc).
     """
-    if not secret:
-        raise ValueError("auth_secret must not be empty when generating access token.")
+    if not secret or len(secret.strip()) < 32:
+        raise ValueError("auth_secret must be at least 32 characters long.")
 
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=expires_in_minutes)
@@ -157,7 +157,8 @@ def decode_access_token(token: str, secret: str) -> Optional[dict[str, Any]]:
             return None
 
         header = json.loads(_b64url_decode(h_b64).decode("utf-8"))
-        if header.get("alg") != "HS256":
+        alg = header.get("alg")
+        if alg != "HS256" or alg == "none" or not alg:
             return None
 
         payload = json.loads(_b64url_decode(p_b64).decode("utf-8"))
