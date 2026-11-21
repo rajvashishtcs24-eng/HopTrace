@@ -2,7 +2,6 @@ import { useCallback, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
-  MiniMap,
   Controls,
   useNodesState,
   useEdgesState,
@@ -257,11 +256,6 @@ export default function TopologyCanvas() {
         <Controls
           style={{ background: '#0a1628', border: '1px solid #334155', borderRadius: '8px' }}
           showInteractive={false}
-        />
-        <MiniMap
-          style={{ background: '#0a1628', border: '1px solid #334155' }}
-          nodeColor={n => NODE_TYPES_META[n.data?.nodeType]?.color || '#64748b'}
-          maskColor="#050d1a88"
         />
       </ReactFlow>
     </div>
