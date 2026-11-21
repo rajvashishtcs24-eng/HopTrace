@@ -48,7 +48,7 @@ def ingest_measurements(
             )
 
     # 2. Reject unknown component IDs with 422
-    topo = get_topology(force_in_memory=True)
+    topo = get_topology()
     valid_components = {link.id for link in topo.links} | {node.id for node in topo.nodes}
     for item in items:
         if item.component_id not in valid_components:

@@ -124,16 +124,16 @@ make test
 npm test
 ```
 
-### Backend Integration & Unit Tests (202 Passed, 2 Skipped)
+### Backend Integration & Unit Tests (419 Passed, 5 Skipped for live Neo4j Aura)
 ```bash
 python -m pytest tests -v
 # or:
 npm run test:backend
 ```
 
-### Frontend Component & Geometry Tests (42 Passed)
+### Frontend Component & Geometry Tests (57 Passed)
 ```bash
-node --test frontend/src/components/VillageMap/*.test.js frontend/src/components/NetworkView/viewPref.test.js
+node --test frontend/src/components/VillageMap/*.test.js frontend/src/components/NetworkView/viewPref.test.js frontend/src/lib/*.test.js
 # or:
 npm run test:frontend
 ```

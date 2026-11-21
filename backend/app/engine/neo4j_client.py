@@ -65,6 +65,38 @@ def sanitize_error(error: Any, password: Optional[str] = None) -> str:
     return msg
 
 
+def sanitize_last_error(
+    error: Any,
+    client: Optional[Neo4jClient] = None,
+    password: Optional[str] = None,
+    username: Optional[str] = None,
+    uri: Optional[str] = None,
+) -> str:
+    """Returns a generic error summary for public status display (no host, port, user, or password).
+
+    Keeps full details strictly in server-side logs.
+    Examples:
+      - "Neo4j unreachable (timeout)"
+      - "Neo4j unreachable (ServiceUnavailable)"
+      - "Neo4j authentication failed (AuthError)"
+    """
+    if not error:
+        return ""
+    err_str = str(error).lower()
+    err_class = error.__class__.__name__ if isinstance(error, Exception) else "ConnectionError"
+
+    if "timed out" in err_str or "timeout" in err_str:
+        return "Neo4j unreachable (timeout)"
+    if "auth" in err_str or err_class == "AuthError":
+        return "Neo4j authentication failed (AuthError)"
+    if "serviceunavailable" in err_str or err_class == "ServiceUnavailable":
+        return "Neo4j unreachable (ServiceUnavailable)"
+    if "connection refused" in err_str or "refused" in err_str:
+        return "Neo4j unreachable (ConnectionRefused)"
+
+    return f"Neo4j unreachable ({err_class})"
+
+
 class Neo4jClient:
     """Encapsulates Neo4j driver connection and query execution for HopTrace."""
 
@@ -131,7 +163,11 @@ class Neo4jClient:
             if not self.uri:
                 raise ValueError("NEO4J_URI is not configured.")
             auth = (self.username, self.password) if self.password else None
-            self._driver = GraphDatabase.driver(self.uri, auth=auth)
+            self._driver = GraphDatabase.driver(
+                self.uri,
+                auth=auth,
+                connection_timeout=2.0,
+            )
         return self._driver
 
     def check_connection(self) -> Dict[str, Any]:

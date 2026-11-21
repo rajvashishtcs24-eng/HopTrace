@@ -46,7 +46,8 @@ class EngineTopologyProvider(TopologyProvider):
     def get_topology(self) -> TopologyResponse:
         """Fetch topology from graph engine and adapt to API schema."""
         try:
-            topology = get_topology(force_in_memory=True)
+            # get_topology() checks settings.graph_backend and falls back to in-memory if unreachable
+            topology = get_topology()
         except Exception as exc:
             raise TopologyUnavailableError(
                 f"Failed to retrieve topology from graph engine: {exc}"

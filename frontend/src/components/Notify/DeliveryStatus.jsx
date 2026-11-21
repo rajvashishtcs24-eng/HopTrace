@@ -66,6 +66,7 @@ export default function DeliveryStatus({
         ) : (
           deliveries.map((deliv, idx) => {
             const isFailed = deliv.status === 'failed';
+            const isSimulated = Boolean(deliv.sandboxed || deliv.provider === 'console');
             return (
               <div key={deliv.id || idx} className="p-2.5 text-xs hover:bg-slate-900/40 transition-colors">
                 <div className="flex items-start justify-between gap-2">
@@ -88,6 +89,11 @@ export default function DeliveryStatus({
                           Sarvam
                         </span>
                       )}
+                      {isSimulated && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50">
+                          simulated (not delivered)
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-slate-400 text-[11px] mt-1 line-clamp-2">
@@ -107,11 +113,13 @@ export default function DeliveryStatus({
                       className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
                         isFailed
                           ? 'bg-red-950 text-red-400 border-red-800/60'
+                          : isSimulated
+                          ? 'bg-amber-950 text-amber-400 border-amber-800/60'
                           : 'bg-emerald-950 text-emerald-400 border-emerald-800/60'
                       }`}
                     >
                       {isFailed ? <XCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                      {deliv.status}
+                      {isSimulated && !isFailed ? 'simulated (not delivered)' : deliv.status}
                     </span>
                     {deliv.updated_at && (
                       <div className="text-[10px] text-slate-500 mt-1">

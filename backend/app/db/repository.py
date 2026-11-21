@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 
@@ -213,6 +213,31 @@ def get_incident(conn: sqlite3.Connection, incident_id: str) -> dict[str, Any] |
     )
     row = cursor.fetchone()
     return _row_to_incident(row) if row is not None else None
+
+
+def get_incident_history_30d(
+    conn: sqlite3.Connection,
+    component_id: str,
+    days: int = 30,
+) -> int:
+    """Returns count of incidents involving this component within the last N days.
+
+    Authoritative SQLite fallback when Neo4j is unavailable.
+    Counts strictly data_source = 'live' incidents (simulated incidents return 0).
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    cursor = conn.execute(
+        """
+        SELECT count(*)
+        FROM incidents
+        WHERE (suspected_component_id = ? OR id = ?)
+          AND data_source = 'live'
+          AND created_at >= ?;
+        """,
+        (component_id, component_id, cutoff),
+    )
+    row = cursor.fetchone()
+    return int(row[0]) if row else 0
 
 
 def create_incident(conn: sqlite3.Connection, incident_data: dict[str, Any]) -> dict[str, Any]:

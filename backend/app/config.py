@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     # Comma-separated E.164 phone numbers permitted for real live Twilio sends.
     # Any destination outside this allowlist is safely routed through the console/sandbox provider.
     real_send_allowlist: str = ""
+    notify_max_recipients: int = 50
 
     @property
     def real_send_allowlist_set(self) -> set[str]:
@@ -164,6 +165,15 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
+
+    # --- Graph backend selection ---
+    # "auto"   – use Neo4j when healthy, fall back to in-memory (default)
+    # "neo4j"  – always attempt Neo4j; fall back on error
+    # "memory" – always use in-memory store (used in tests with GRAPH_BACKEND=memory)
+    graph_backend: str = "auto"
+
+    # Topology snapshot cache TTL in seconds (avoids querying Neo4j on every probe batch)
+    graph_topology_cache_ttl: int = 120
 
     # --- SQLite Database ---
     sqlite_db_path: str = "hoptrace.db"
