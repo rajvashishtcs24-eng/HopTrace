@@ -1,5 +1,5 @@
 """
-HopTrace FastAPI application entry point — v2.
+HopTrace FastAPI application entry point â€” v2.
 
 v2 additions:
   - WebSocket streaming endpoint /ws/telemetry
@@ -75,14 +75,14 @@ app = FastAPI(
     title="HopTrace API v2",
     version="2.0.0",
     description=(
-        "HopTrace v2 — Advanced ISP network fault localisation and subscriber operations. "
-        "Multi-village topology · EWMA anomaly detection · Sarvam AI structured reports · "
-        "Live WebSocket telemetry streaming. hackFront India · Theme T3: Telecom and Connectivity."
+        "HopTrace v2 â€” Advanced ISP network fault localisation and subscriber operations. "
+        "Multi-village topology Â· EWMA anomaly detection Â· Sarvam AI structured reports Â· "
+        "Live WebSocket telemetry streaming. hackFront India Â· Theme T3: Telecom and Connectivity."
     ),
     lifespan=lifespan,
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
+# â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -114,7 +114,7 @@ class WebSocketAuthMiddleware:
 app.add_middleware(WebSocketAuthMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Routers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 API_PREFIX = "/api/v1"
 
 # Public (no authentication required)
@@ -139,7 +139,7 @@ app.include_router(explanations_router,  prefix=API_PREFIX, tags=["explanations"
 app.include_router(telemetry_ws_router,  prefix=API_PREFIX, tags=["telemetry"])
 app.include_router(telemetry_ws_router,  tags=["realtime"])   # WebSocket (no prefix)
 
-# M4 public status (no RBAC � public village status page)
+# M4 public status (no RBAC — public village status page)
 from app.api.public_status import router as public_status_router  # noqa: E402
 app.include_router(public_status_router, prefix=API_PREFIX, tags=["public"])
 
