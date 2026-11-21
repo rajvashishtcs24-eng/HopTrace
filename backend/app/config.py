@@ -165,6 +165,15 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
 
+    # --- Graph backend selection ---
+    # "auto"   – use Neo4j when healthy, fall back to in-memory (default)
+    # "neo4j"  – always attempt Neo4j; fall back on error
+    # "memory" – always use in-memory store (used in tests with GRAPH_BACKEND=memory)
+    graph_backend: str = "auto"
+
+    # Topology snapshot cache TTL in seconds (avoids querying Neo4j on every probe batch)
+    graph_topology_cache_ttl: int = 120
+
     # --- SQLite Database ---
     sqlite_db_path: str = "hoptrace.db"
     seed_demo_subscribers: bool = True

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agents import router as agents_router
 from app.api.explanations import router as explanations_router
+from app.api.graph import router as graph_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 # M3: Notification routes
@@ -54,7 +55,8 @@ async def lifespan(app: FastAPI):
     if settings.topology_provider.lower() == "engine":
         try:
             from app.engine.facade import seed_topology
-            seed_topology(force_in_memory=True)
+            force_mem = settings.graph_backend.lower() == "memory"
+            seed_topology(force_in_memory=force_mem)
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to initialize graph engine topology during startup: {exc}"
@@ -126,6 +128,7 @@ app.include_router(probes_router,        prefix=API_PREFIX, tags=["probes"], dep
 app.include_router(agents_router,        prefix=API_PREFIX, tags=["agents"], dependencies=[Depends(require_agent_key)])
 
 # Protected endpoints (GET/HEAD: viewer | operator; Modifications: operator only)
+app.include_router(graph_router,         prefix=API_PREFIX, tags=["graph"], dependencies=[Depends(enforce_rbac)])
 app.include_router(topology_router,      prefix=API_PREFIX, tags=["topology"], dependencies=[Depends(enforce_rbac)])
 app.include_router(topology_v2_router,   prefix=API_PREFIX, tags=["topology"], dependencies=[Depends(enforce_rbac)])   # risk, history, villages
 app.include_router(subscribers_router,   prefix=API_PREFIX, tags=["subscribers"], dependencies=[Depends(enforce_rbac)])
@@ -133,8 +136,6 @@ app.include_router(incidents_router,     prefix=API_PREFIX, tags=["incidents"], 
 app.include_router(notify_router,        prefix=API_PREFIX, tags=["notifications"], dependencies=[Depends(enforce_rbac)])
 app.include_router(lab_router,           prefix=API_PREFIX, tags=["lab"], dependencies=[Depends(enforce_rbac)])
 app.include_router(explanations_router,  prefix=API_PREFIX, tags=["explanations"], dependencies=[Depends(enforce_rbac)])
-
-# Realtime WebSocket
 app.include_router(telemetry_ws_router,  prefix=API_PREFIX, tags=["telemetry"])
 app.include_router(telemetry_ws_router,  tags=["realtime"])   # WebSocket (no prefix)
 
