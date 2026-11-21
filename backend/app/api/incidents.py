@@ -307,6 +307,77 @@ def get_business_impact(
     )
 
 
+def reconcile_notify_recipients(
+    db: sqlite3.Connection,
+    raw_subs: list[dict[str, Any]],
+    suspected_component_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Two-way reconciliation between graph dependency analysis and SQLite subscribers table.
+
+    1. Forward reconciliation: verifies each graph subscriber exists in SQLite.
+       Logs warning for phantom/missing IDs and discards them.
+    2. Reverse reconciliation: computes SQLite subscribers under affected access points
+       or villages, compares them with the graph result, logs any mismatch,
+       and includes the extra subscribers in the send list.
+    """
+    graph_sub_ids = {s["id"] for s in raw_subs if "id" in s}
+    affected_aps = {
+        s.get("access_point_id") for s in raw_subs if s.get("access_point_id")
+    }
+    if suspected_component_id and suspected_component_id.startswith("AP"):
+        affected_aps.add(suspected_component_id)
+
+    # 1. Fetch SQLite subscribers for all graph-identified IDs
+    sqlite_subs_by_id = {s["id"]: s for s in get_subscribers_by_ids(db, list(graph_sub_ids))}
+
+    # 2. Fetch SQLite subscribers for all affected access points
+    sqlite_ap_subs: list[dict[str, Any]] = []
+    if affected_aps:
+        placeholders = ",".join("?" for _ in affected_aps)
+        cursor = db.execute(
+            f"""
+            SELECT id, display_name, plan, plan_price, phone, preferred_language,
+                   access_point_id, status, payment_status, due_date
+            FROM subscribers
+            WHERE access_point_id IN ({placeholders})
+            ORDER BY id ASC;
+            """,
+            list(affected_aps),
+        )
+        sqlite_ap_subs = [dict(r) for r in cursor.fetchall()]
+
+    all_sqlite_subs = dict(sqlite_subs_by_id)
+    for s in sqlite_ap_subs:
+        all_sqlite_subs[s["id"]] = s
+
+    # Forward check: graph ID not in SQLite
+    for s in raw_subs:
+        sid = s.get("id")
+        if sid and sid not in all_sqlite_subs:
+            logger.warning(
+                "Subscriber ID %s from graph not found in SQLite subscribers table", sid
+            )
+
+    # Base list from confirmed graph subscribers
+    enriched_subs = [all_sqlite_subs[s["id"]] for s in raw_subs if s.get("id") in all_sqlite_subs]
+    seen_ids = {s["id"] for s in enriched_subs}
+
+    # Reverse check: SQLite subscriber in affected AP missed by graph
+    for s in sqlite_ap_subs:
+        sid = s["id"]
+        if sid not in graph_sub_ids:
+            logger.warning(
+                "Subscriber ID %s in SQLite under affected AP %s not returned by graph dependency query; reconciling into recipient list",
+                sid,
+                s.get("access_point_id"),
+            )
+            if sid not in seen_ids:
+                enriched_subs.append(s)
+                seen_ids.add(sid)
+
+    return enriched_subs
+
+
 @router.get(
     "/incidents/{incident_id}/notifications/preview",
     response_model=NotificationPreviewResponse,
@@ -343,7 +414,7 @@ def preview_incident_notifications(
             detail=str(exc),
         ) from exc
 
-    # 3. Determine affected subscribers
+    # 3. Determine affected subscribers & perform two-way reconciliation with SQLite
     try:
         raw_subs = adapter.get_affected_subscribers(
             incident_id=incident_id,
@@ -357,19 +428,11 @@ def preview_incident_notifications(
             detail=str(exc),
         ) from exc
 
-    sub_ids = [s["id"] for s in raw_subs if "id" in s]
-    if sub_ids:
-        full_subs = get_subscribers_by_ids(db, sub_ids)
-        subs_map = {s["id"]: s for s in full_subs}
-        for s in raw_subs:
-            sid = s.get("id")
-            if sid and sid not in subs_map:
-                logger.warning(
-                    "Subscriber ID %s from graph not found in SQLite subscribers table", sid
-                )
-        enriched_subs = [subs_map[s["id"]] for s in raw_subs if s.get("id") in subs_map]
-    else:
-        enriched_subs = []
+    enriched_subs = reconcile_notify_recipients(
+        db=db,
+        raw_subs=raw_subs,
+        suspected_component_id=incident.get("suspected_component_id"),
+    )
 
     # 4. Generate previews
     try:
@@ -492,23 +555,16 @@ def send_incident_notifications(
         ) from exc
 
     channel = (payload.channel if payload else "sms") or "sms"
+
+    # Reconcile graph subscriber analysis with SQLite in both directions
+    enriched_subs = reconcile_notify_recipients(
+        db=db,
+        raw_subs=raw_subs,
+        suspected_component_id=incident.get("suspected_component_id"),
+    )
     if payload and payload.subscriber_ids:
         target_ids = set(payload.subscriber_ids)
-        raw_subs = [s for s in raw_subs if s.get("id") in target_ids]
-
-    sub_ids = [s["id"] for s in raw_subs if "id" in s]
-    if sub_ids:
-        full_subs = get_subscribers_by_ids(db, sub_ids)
-        subs_map = {s["id"]: s for s in full_subs}
-        for s in raw_subs:
-            sid = s.get("id")
-            if sid and sid not in subs_map:
-                logger.warning(
-                    "Subscriber ID %s from graph not found in SQLite subscribers table", sid
-                )
-        enriched_subs = [subs_map[s["id"]] for s in raw_subs if s.get("id") in subs_map]
-    else:
-        enriched_subs = []
+        enriched_subs = [s for s in enriched_subs if s.get("id") in target_ids]
 
     # 5. Dispatch notifications
     try:

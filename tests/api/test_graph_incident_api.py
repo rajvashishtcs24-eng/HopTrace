@@ -248,3 +248,120 @@ def test_notify_reconciliation_logs_warning_and_filters_unreconciled(
 
     # Warning was logged for the mismatched subscriber
     assert any("SUB_GHOST_999" in record.message for record in caplog.records)
+
+
+def test_incident_history_counts_only_live_incidents(
+    test_client: TestClient,
+    isolated_db: str,
+) -> None:
+    """Requirement: The incident history query must count only data_source = 'live' incidents.
+
+    Simulated incidents return 0 or 'no live history'.
+    """
+    from app.db.repository import get_incident_history_30d
+
+    conn = get_db_connection(isolated_db)
+    try:
+        # Simulated incidents exist on L3 (e.g. incident-demo-001)
+        hist_simulated = get_incident_history_30d(conn, "L3")
+        assert hist_simulated == 0, "Simulated incidents must NOT be counted in incident history!"
+
+        # Create a simulated incident on L99
+        create_incident(
+            conn,
+            {
+                "id": "inc-sim-test-99",
+                "status": "closed",
+                "suspected_component_id": "L99",
+                "suspected_component_type": "link",
+                "summary": "Simulated fault",
+                "data_source": "simulated",
+            },
+        )
+        assert get_incident_history_30d(conn, "L99") == 0
+
+        # Now create a LIVE incident on L99
+        create_incident(
+            conn,
+            {
+                "id": "inc-live-test-99",
+                "status": "open",
+                "suspected_component_id": "L99",
+                "suspected_component_type": "link",
+                "summary": "Real live telemetry anomaly",
+                "data_source": "live",
+            },
+        )
+        assert get_incident_history_30d(conn, "L99") == 1
+
+        # Add another simulated incident on L99 - live count remains 1
+        create_incident(
+            conn,
+            {
+                "id": "inc-sim-test-99-b",
+                "status": "closed",
+                "suspected_component_id": "L99",
+                "suspected_component_type": "link",
+                "summary": "Simulated second fault",
+                "data_source": "simulated",
+            },
+        )
+        assert get_incident_history_30d(conn, "L99") == 1
+    finally:
+        conn.close()
+
+    # Query simulated incident endpoint: returns history.incidents_30d == 0
+    resp_sim = test_client.get("/api/v1/incidents/inc-sim-test-99/graph")
+    assert resp_sim.status_code == 200
+    assert resp_sim.json()["history"]["incidents_30d"] == 0
+
+    # Query live incident endpoint: returns history.incidents_30d == 1
+    resp_live = test_client.get("/api/v1/incidents/inc-live-test-99/graph")
+    assert resp_live.status_code == 200
+    assert resp_live.json()["history"]["incidents_30d"] == 1
+
+
+def test_notify_reconciliation_reverse_direction_includes_extra_sqlite_subscriber(
+    test_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_db: str,
+) -> None:
+    """Requirement: Extend notify reconciliation to the reverse direction:
+
+    compute SQLite subscribers for affected APs, compare with graph result,
+    log any mismatch, and include extra SQLite subscribers in the send list.
+    """
+    from app.providers.registry import get_dependency_adapter
+
+    monkeypatch.setattr(settings, "explanation_provider", "simulated")
+
+    # In SQLite isolated_db, AP1 serves SUB101, SUB102, and SUB103.
+    # Suppose the graph dependency engine only returns SUB101 (missing SUB102 and SUB103).
+    class PartialGraphAdapter:
+        def get_affected_subscribers(self, *args, **kwargs):
+            return [
+                {"id": "SUB101", "display_name": "Ramesh Patel", "access_point_id": "AP1"},
+            ]
+
+    app.dependency_overrides[get_dependency_adapter] = PartialGraphAdapter
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            resp = test_client.get("/api/v1/incidents/incident-demo-001/notifications/preview")
+    finally:
+        app.dependency_overrides.pop(get_dependency_adapter, None)
+
+    assert resp.status_code == 200
+    previews = resp.json()["previews"]
+    recip_ids = [p["subscriber_id"] for p in previews]
+
+    # Verify that the extra subscribers present in SQLite under AP1 (SUB102, SUB103) were reconciled into the send list
+    assert "SUB101" in recip_ids
+    assert "SUB102" in recip_ids
+    assert "SUB103" in recip_ids
+
+    # Verify reverse reconciliation warnings were logged for the missing subscribers
+    log_text = " ".join(record.message for record in caplog.records)
+    assert "SUB102 in SQLite under affected AP AP1 not returned by graph dependency query" in log_text
+    assert "SUB103 in SQLite under affected AP AP1 not returned by graph dependency query" in log_text

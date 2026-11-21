@@ -110,8 +110,9 @@ def _build_memory_incident_response(
         gateway_id="GW1",
     )
 
-    # Fallback history reads from SQLite incidents table, never from memory store
-    hist_count = get_incident_history_30d(db, component_id, days=30)
+    # Fallback history reads from SQLite incidents table, never from memory store.
+    # Simulated incidents return 0 (only data_source = 'live' incidents count towards history).
+    hist_count = 0 if is_simulated else get_incident_history_30d(db, component_id, days=30)
 
     return IncidentGraphResponse(
         backend="memory",
