@@ -65,6 +65,41 @@ def sanitize_error(error: Any, password: Optional[str] = None) -> str:
     return msg
 
 
+def sanitize_last_error(
+    error: Any,
+    client: Optional[Neo4jClient] = None,
+    password: Optional[str] = None,
+    username: Optional[str] = None,
+    uri: Optional[str] = None,
+) -> str:
+    """Strips URI, username, and password from error messages for public status display.
+
+    Guarantees no raw connection URI, username, or password is leaked in GET /graph/status.
+    """
+    if not error:
+        return ""
+    msg = str(error)
+    pw = password or (client.password if client else None)
+    user = username or (client.username if client else None)
+    target_uri = uri or (client.uri if client else None)
+    sanitized_uri = client.sanitized_uri if client else None
+
+    if pw and pw in msg:
+        msg = msg.replace(pw, "***")
+    if user and user in msg:
+        msg = msg.replace(user, "***")
+    if target_uri and target_uri in msg:
+        msg = msg.replace(target_uri, "[REDACTED_URI]")
+    if sanitized_uri and sanitized_uri in msg:
+        msg = msg.replace(sanitized_uri, "[REDACTED_URI]")
+
+    # Strip any lingering protocol://host:port URIs
+    msg = re.sub(r"[a-zA-Z0-9+.-]+://[^\s'\"]+", "[REDACTED_URI]", msg)
+    # Strip any user '...' occurrences
+    msg = re.sub(r"user '([^']+)'", "user '***'", msg)
+    return msg
+
+
 class Neo4jClient:
     """Encapsulates Neo4j driver connection and query execution for HopTrace."""
 
@@ -131,7 +166,11 @@ class Neo4jClient:
             if not self.uri:
                 raise ValueError("NEO4J_URI is not configured.")
             auth = (self.username, self.password) if self.password else None
-            self._driver = GraphDatabase.driver(self.uri, auth=auth)
+            self._driver = GraphDatabase.driver(
+                self.uri,
+                auth=auth,
+                connection_timeout=2.0,
+            )
         return self._driver
 
     def check_connection(self) -> Dict[str, Any]:

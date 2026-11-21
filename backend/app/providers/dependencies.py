@@ -176,11 +176,11 @@ class EngineDependencyAdapter(DependencyAnalysisAdapter):
             from app.engine.facade import get_affected_subscribers, get_engine
 
             engine = get_engine()
-            # Attempt facade function using incident_id
-            result = get_affected_subscribers(incident_id, force_in_memory=True)
+            # Attempt facade function using incident_id (respects GRAPH_BACKEND)
+            result = get_affected_subscribers(incident_id)
             # If incident is not in engine's in-memory store (e.g. SQLite-only incident), query active store directly
             if result.count == 0 and suspected_component_id:
-                store = engine.get_active_store(force_in_memory=True)
+                store = engine.get_active_store()
                 result = store.get_affected_subscribers(
                     suspected_component_id=suspected_component_id,
                     component_type=component_type,

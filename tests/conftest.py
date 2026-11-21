@@ -8,6 +8,7 @@ Ensures:
 """
 from __future__ import annotations
 
+import os
 from typing import Generator
 import pytest
 from fastapi.testclient import TestClient
@@ -20,10 +21,12 @@ from app.main import app
 
 @pytest.fixture(scope="session", autouse=True)
 def configure_session_test_db(tmp_path_factory) -> str:
-    """Redirect default settings.sqlite_db_path to a temp file for the entire test session."""
+    """Redirect default settings.sqlite_db_path to a temp file and ensure memory backend."""
     temp_dir = tmp_path_factory.mktemp("session_db")
     test_db_file = str(temp_dir / "hoptrace_test_session.db")
     settings.sqlite_db_path = test_db_file
+    settings.graph_backend = "memory"
+    os.environ["GRAPH_BACKEND"] = "memory"
     init_db(test_db_file, seed_demo=True)
     return test_db_file
 

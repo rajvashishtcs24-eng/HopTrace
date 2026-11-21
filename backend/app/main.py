@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agents import router as agents_router
 from app.api.explanations import router as explanations_router
+from app.api.graph import router as graph_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.lab import router as lab_router
@@ -47,7 +48,8 @@ async def lifespan(app: FastAPI):
     if settings.topology_provider.lower() == "engine":
         try:
             from app.engine.facade import seed_topology
-            seed_topology(force_in_memory=True)
+            force_mem = settings.graph_backend.lower() == "memory"
+            seed_topology(force_in_memory=force_mem)
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to initialize graph engine topology during startup: {exc}"
@@ -87,6 +89,7 @@ app.add_middleware(RateLimitMiddleware)
 API_PREFIX = "/api/v1"
 
 app.include_router(health_router,        prefix=API_PREFIX, tags=["health"])
+app.include_router(graph_router,         prefix=API_PREFIX, tags=["graph"])
 app.include_router(topology_router,      prefix=API_PREFIX, tags=["topology"])
 app.include_router(topology_v2_router,   prefix=API_PREFIX, tags=["topology"])   # risk, history, villages
 app.include_router(subscribers_router,   prefix=API_PREFIX, tags=["subscribers"])
