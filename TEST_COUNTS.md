@@ -1,8 +1,8 @@
 # HopTrace Test Counts & Quality Gate Report
 
-Generated at: 2026-11-21 19:10 IST  
-Branch: `feat/neo4j-on-main`  
-Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intelligence) on main
+Generated at: 2026-11-21 21:08 IST  
+Branch: `main`  
+Integrated Tracks: N0–N3 (Neo4j Graph Database Integration, Incident Intelligence & UI) on main
 
 ---
 
@@ -10,10 +10,10 @@ Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intellig
 
 | Test Suite | Total Tests | Passed | Failed | Skipped | Pass Rate | Execution Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 424 | **419** | 0 | 5* | **100%** | ~26s |
-| **Frontend Unit Tests (node --test)** | 57 | **57** | 0 | 0 | **100%** | ~0.2s |
+| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 424 | **419** | 0 | 5* | **100%** | ~55s |
+| **Frontend Unit Tests (node --test)** | 150 | **150** | 0 | 0 | **100%** | ~0.5s |
 | **Frontend Code Quality (ESLint)** | All files | **0 errors** | 0 warnings | - | **100%** | ~15s |
-| **Combined Full-Stack Total** | **481** | **476** | **0** | **5** | **100%** | - |
+| **Combined Full-Stack Total** | **574** | **569** | **0** | **5** | **100%** | - |
 
 *\*Note on Skipped Tests (5 tests):*  
 All 5 skipped tests are live Neo4j Aura database integration and parity tests (`@pytest.mark.integration` in `tests/engine/test_neo4j_integration.py` and `tests/engine/test_graph_n2_parity.py`). They skip cleanly when `NEO4J_URI` is not configured, and execute automatically against a live Neo4j Aura or container instance when credentials are provided.
