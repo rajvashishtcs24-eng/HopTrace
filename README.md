@@ -124,7 +124,7 @@ make test
 npm test
 ```
 
-### Backend Integration & Unit Tests (324 Passed, 5 Skipped for live Neo4j Aura)
+### Backend Integration & Unit Tests (419 Passed, 5 Skipped for live Neo4j Aura)
 ```bash
 python -m pytest tests -v
 # or:

@@ -1,8 +1,8 @@
 # HopTrace Test Counts & Quality Gate Report
 
-Generated at: 2026-11-21 17:00 IST  
-Branch: `feat/neo4j-n1-n2`  
-Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intelligence)
+Generated at: 2026-11-21 19:10 IST  
+Branch: `feat/neo4j-on-main`  
+Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intelligence) on main
 
 ---
 
@@ -10,17 +10,17 @@ Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intellig
 
 | Test Suite | Total Tests | Passed | Failed | Skipped | Pass Rate | Execution Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 329 | **324** | 0 | 5* | **100%** | ~18s |
+| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 424 | **419** | 0 | 5* | **100%** | ~26s |
 | **Frontend Unit Tests (node --test)** | 57 | **57** | 0 | 0 | **100%** | ~0.2s |
 | **Frontend Code Quality (ESLint)** | All files | **0 errors** | 0 warnings | - | **100%** | ~15s |
-| **Combined Full-Stack Total** | **386** | **381** | **0** | **5** | **100%** | - |
+| **Combined Full-Stack Total** | **481** | **476** | **0** | **5** | **100%** | - |
 
 *\*Note on Skipped Tests (5 tests):*  
 All 5 skipped tests are live Neo4j Aura database integration and parity tests (`@pytest.mark.integration` in `tests/engine/test_neo4j_integration.py` and `tests/engine/test_graph_n2_parity.py`). They skip cleanly when `NEO4J_URI` is not configured, and execute automatically against a live Neo4j Aura or container instance when credentials are provided.
 
 ---
 
-## 1. Backend Test Breakdown (`python -m pytest tests -v`) — 329 Tests
+## 1. Backend Test Breakdown (`python -m pytest tests -v`) — 424 Tests
 
 ### Agent Tests (`tests/agent/`) - 15 Tests
 - `tests/agent/test_agent_field_hardening.py`:

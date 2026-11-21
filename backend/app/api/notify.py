@@ -14,10 +14,13 @@ SQLite persistence, and notification providers.
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
@@ -88,6 +91,77 @@ def _get_active_incident(incident_id: str, db: sqlite3.Connection) -> dict[str, 
     return inc
 
 
+def reconcile_notify_recipients(
+    db: sqlite3.Connection,
+    raw_subs: list[dict[str, Any]],
+    suspected_component_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Two-way reconciliation between graph dependency analysis and SQLite subscribers table.
+
+    1. Forward reconciliation: verifies each graph subscriber exists in SQLite.
+       Logs warning for phantom/missing IDs and discards them.
+    2. Reverse reconciliation: computes SQLite subscribers under affected access points
+       or villages, compares them with the graph result, logs any mismatch,
+       and includes the extra subscribers in the send list.
+    """
+    graph_sub_ids = {s["id"] for s in raw_subs if "id" in s}
+    affected_aps = {
+        s.get("access_point_id") for s in raw_subs if s.get("access_point_id")
+    }
+    if suspected_component_id and suspected_component_id.startswith("AP"):
+        affected_aps.add(suspected_component_id)
+
+    # 1. Fetch SQLite subscribers for all graph-identified IDs
+    sqlite_subs_by_id = {s["id"]: s for s in get_subscribers_by_ids(db, list(graph_sub_ids))}
+
+    # 2. Fetch SQLite subscribers for all affected access points
+    sqlite_ap_subs: list[dict[str, Any]] = []
+    if affected_aps:
+        placeholders = ",".join("?" for _ in affected_aps)
+        cursor = db.execute(
+            f"""
+            SELECT id, display_name, plan, plan_price, phone, preferred_language,
+                   access_point_id, status, payment_status, due_date
+            FROM subscribers
+            WHERE access_point_id IN ({placeholders})
+            ORDER BY id ASC;
+            """,
+            list(affected_aps),
+        )
+        sqlite_ap_subs = [dict(r) for r in cursor.fetchall()]
+
+    all_sqlite_subs = dict(sqlite_subs_by_id)
+    for s in sqlite_ap_subs:
+        all_sqlite_subs[s["id"]] = s
+
+    # Forward check: graph ID not in SQLite (dropped with warning)
+    for s in raw_subs:
+        sid = s.get("id")
+        if sid and sid not in all_sqlite_subs:
+            logger.warning(
+                "Subscriber ID %s from graph not found in SQLite subscribers table; dropping from recipient list", sid
+            )
+
+    # Base list from confirmed graph subscribers
+    enriched_subs = [all_sqlite_subs[s["id"]] for s in raw_subs if s.get("id") in all_sqlite_subs]
+    seen_ids = {s["id"] for s in enriched_subs}
+
+    # Reverse check: SQLite subscriber in affected AP missed by graph (added with warning)
+    for s in sqlite_ap_subs:
+        sid = s["id"]
+        if sid not in graph_sub_ids:
+            logger.warning(
+                "Subscriber ID %s in SQLite under affected AP %s not returned by graph dependency query; reconciling into recipient list",
+                sid,
+                s.get("access_point_id"),
+            )
+            if sid not in seen_ids:
+                enriched_subs.append(s)
+                seen_ids.add(sid)
+
+    return enriched_subs
+
+
 @router.get(
     "/incidents/{incident_id}/notifications/preview",
     response_model=NotificationPreviewResponse,
@@ -149,13 +223,11 @@ def preview_incident_notifications(
             detail=str(exc),
         ) from exc
 
-    sub_ids = [s["id"] for s in raw_subs if "id" in s]
-    if sub_ids:
-        full_subs = get_subscribers_by_ids(db, sub_ids)
-        subs_map = {s["id"]: s for s in full_subs}
-        enriched_subs = [subs_map.get(s["id"], s) for s in raw_subs]
-    else:
-        enriched_subs = raw_subs
+    enriched_subs = reconcile_notify_recipients(
+        db=db,
+        raw_subs=raw_subs,
+        suspected_component_id=incident.get("suspected_component_id"),
+    )
 
     previews_data = generate_notification_previews(
         incident=incident,
@@ -229,6 +301,19 @@ def send_incident_notifications(
             detail=str(exc),
         ) from exc
 
+    # Route non-live (simulated / lab) incidents to console sandbox even when Twilio is configured
+    data_source = str(incident.get("data_source") or "").strip().lower()
+    is_live = data_source == "live"
+    active_notif_provider = notif_provider
+    if not is_live and notif_provider.provider_name == "twilio":
+        from app.providers.notifications import ConsoleNotificationProvider
+        active_notif_provider = ConsoleNotificationProvider()
+        logger.info(
+            "Incident %s data_source='%s' is non-live; safely routing to console sandbox instead of Twilio",
+            incident_id,
+            data_source,
+        )
+
     # Check explanation provider if translation requested
     try:
         explanation_provider = get_explanation_provider()
@@ -246,7 +331,7 @@ def send_incident_notifications(
     req_kind = (payload.kind if payload else "outage") or "outage"
     use_trans = payload.translate if payload else False
 
-    # 4. Determine affected subscribers BEFORE attempting the atomic batch insert
+    # 4. Determine affected subscribers and reconcile with SQLite in both directions
     try:
         raw_subs = adapter.get_affected_subscribers(
             incident_id=incident_id,
@@ -260,7 +345,12 @@ def send_incident_notifications(
             detail=str(exc),
         ) from exc
 
-    affected_sub_ids = {s["id"] for s in raw_subs if "id" in s}
+    enriched_subs = reconcile_notify_recipients(
+        db=db,
+        raw_subs=raw_subs,
+        suspected_component_id=incident.get("suspected_component_id"),
+    )
+    affected_sub_ids = {s["id"] for s in enriched_subs if "id" in s}
 
     # 5. Validate subscriber selection (before we touch the DB)
     if payload and payload.subscriber_ids is not None:
@@ -271,15 +361,18 @@ def send_incident_notifications(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Subscriber(s) {sorted(list(unrelated))} are not affected by incident '{incident_id}'.",
             )
-        raw_subs = [s for s in raw_subs if s.get("id") in target_ids]
+        enriched_subs = [s for s in enriched_subs if s.get("id") in target_ids]
 
-    sub_ids = [s["id"] for s in raw_subs if "id" in s]
-    if sub_ids:
-        full_subs = get_subscribers_by_ids(db, sub_ids)
-        subs_map = {s["id"]: s for s in full_subs}
-        enriched_subs = [subs_map.get(s["id"], s) for s in raw_subs]
-    else:
-        enriched_subs = raw_subs
+    # Enforce NOTIFY_MAX_RECIPIENTS cap
+    max_recipients = getattr(settings, "notify_max_recipients", 50)
+    if max_recipients > 0 and len(enriched_subs) > max_recipients:
+        logger.warning(
+            "Target recipients count %d exceeds NOTIFY_MAX_RECIPIENTS (%d); capping list to %d",
+            len(enriched_subs),
+            max_recipients,
+            max_recipients,
+        )
+        enriched_subs = enriched_subs[:max_recipients]
 
     # 6. ATOMICALLY insert the batch FIRST (before dispatching) so the DB
     #    UNIQUE(incident_id, idempotency_key) constraint is the authoritative
@@ -296,7 +389,7 @@ def send_incident_notifications(
                 "incident_id": incident_id,
                 "kind": req_kind,
                 "channel": req_channel,
-                "provider": notif_provider.provider_name,
+                "provider": active_notif_provider.provider_name,
                 "idempotency_key": clean_idempotency_key,
                 "created_by": "operator",
                 "created_at": now_iso,
@@ -311,13 +404,15 @@ def send_incident_notifications(
             deliveries = existing_batch.get("deliveries", [])
             sent_c = sum(1 for d in deliveries if d.get("status") in ("sent", "delivered"))
             failed_c = sum(1 for d in deliveries if d.get("status") == "failed")
+            sandboxed_c = sum(1 for d in deliveries if d.get("sandboxed") or d.get("provider") == "console")
             return NotificationSendResponse(
                 incident_id=incident_id,
-                provider=existing_batch.get("provider", notif_provider.provider_name),
+                provider=existing_batch.get("provider", active_notif_provider.provider_name),
                 channel=existing_batch.get("channel", req_channel),
                 total_targeted=len(deliveries),
                 sent_count=sent_c,
                 failed_count=failed_c,
+                sandboxed_count=sandboxed_c,
                 deliveries=[NotificationDeliveryItem(**d) for d in deliveries],
                 deduplicated=True,
                 batch_id=existing_batch.get("id"),
@@ -332,7 +427,7 @@ def send_incident_notifications(
     dispatch_res = dispatch_outage_notifications(
         incident=incident,
         subscribers=enriched_subs,
-        notification_provider=notif_provider,
+        notification_provider=active_notif_provider,
         channel=req_channel,
         kind=req_kind,
         use_translation=use_trans,
@@ -365,6 +460,11 @@ def send_incident_notifications(
     create_notification_deliveries(db, delivery_records)
     db.commit()
 
+    sandboxed_c = sum(
+        1 for d in response_deliveries
+        if d.get("sandboxed") or d.get("provider") == "console"
+    )
+
     return NotificationSendResponse(
         incident_id=incident_id,
         provider=dispatch_res["provider"],
@@ -372,6 +472,7 @@ def send_incident_notifications(
         total_targeted=dispatch_res["total_targeted"],
         sent_count=dispatch_res["sent_count"],
         failed_count=dispatch_res["failed_count"],
+        sandboxed_count=sandboxed_c,
         deliveries=[NotificationDeliveryItem(**d) for d in response_deliveries],
         deduplicated=False,
         batch_id=batch_id,

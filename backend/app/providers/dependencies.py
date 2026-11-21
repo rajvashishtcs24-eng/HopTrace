@@ -172,15 +172,27 @@ class EngineDependencyAdapter(DependencyAnalysisAdapter):
         component_type = suspected_component_type or "link"
 
         try:
-            from app.db.repository import get_subscribers_by_ids
+            from app.db.repository import get_incident, get_subscribers_by_ids
             from app.engine.facade import get_affected_subscribers, get_engine
 
+            # Check if incident is simulated or lab; keep in-memory for those, active store for live
+            is_simulated = False
+            try:
+                inc_row = get_incident(db_conn, incident_id)
+                if inc_row:
+                    data_src = str(inc_row.get("data_source") or "").strip().lower()
+                    if data_src in ("simulated", "lab", "synthetic"):
+                        is_simulated = True
+            except Exception:
+                pass
+
             engine = get_engine()
-            # Attempt facade function using incident_id (respects GRAPH_BACKEND)
-            result = get_affected_subscribers(incident_id)
-            # If incident is not in engine's in-memory store (e.g. SQLite-only incident), query active store directly
+            # Live incidents query the active store (Neo4j if healthy, in-memory fallback).
+            # Lab and simulated incidents force in-memory to isolate real topology.
+            result = get_affected_subscribers(incident_id, force_in_memory=is_simulated)
+            # If incident is not in engine's store (e.g. SQLite-only incident), query active store directly
             if result.count == 0 and suspected_component_id:
-                store = engine.get_active_store()
+                store = engine.get_active_store(force_in_memory=is_simulated)
                 result = store.get_affected_subscribers(
                     suspected_component_id=suspected_component_id,
                     component_type=component_type,

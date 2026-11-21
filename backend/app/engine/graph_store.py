@@ -346,7 +346,7 @@ class Neo4jGraphStore:
         cypher = """
         MATCH (i:Incident)
         WHERE (i.link_id = $component_id OR i.component_id = $component_id)
-          AND (i.data_source = 'live' OR i.data_source IS NULL)
+          AND i.data_source = 'live'
           AND i.started_at >= $cutoff
         RETURN count(i) AS incidents_30d
         """

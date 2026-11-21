@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     # Comma-separated E.164 phone numbers permitted for real live Twilio sends.
     # Any destination outside this allowlist is safely routed through the console/sandbox provider.
     real_send_allowlist: str = ""
+    notify_max_recipients: int = 50
 
     @property
     def real_send_allowlist_set(self) -> set[str]:
