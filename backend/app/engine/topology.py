@@ -50,6 +50,7 @@ Links (14 total):
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Dict, List, Optional
 from .models import (
     AffectedSubscriber,
@@ -58,6 +59,23 @@ from .models import (
     TopologyLink,
     TopologyNode,
 )
+
+
+def classify_essential(name: str = "") -> bool:
+    """Returns True if the subscriber represents an essential rural service.
+
+    Aligns with theme T3.2 and frontend classification for health, governance,
+    education, emergency, and citizen services.
+    """
+    lower = (name or "").lower()
+    keywords = [
+        "health", "phc", "hospital", "telemedicine",
+        "panchayat", "sarpanch", "ration", "pds",
+        "school", "anganwadi", "library", "college",
+        "police", "chowki", "fire",
+        "csc", "bank", "e-seva", "e-district",
+    ]
+    return any(k in lower for k in keywords)
 
 
 def get_default_nodes() -> List[TopologyNode]:
@@ -611,3 +629,58 @@ class InMemoryTopologyGraph:
         if node:
             return node.properties.get("village")
         return None
+
+    def get_path_from_gateway(
+        self,
+        target_id: str,
+        component_type: str = "link",
+        gateway_id: str = "GW1",
+    ) -> Dict[str, List[str]]:
+        """Returns the shortest path (nodes and links) from gateway to the target component.
+
+        Handles both failed links and failed nodes.
+        """
+        if component_type == "link" or target_id in self.links:
+            link = self.links.get(target_id)
+            if not link:
+                return {"nodes": [gateway_id, target_id], "links": [target_id]}
+            # BFS path from gateway to link source node
+            path_dict = self._bfs_node_path(gateway_id, link.source)
+            nodes = list(path_dict["nodes"])
+            links = list(path_dict["links"])
+            if link.target not in nodes:
+                nodes.append(link.target)
+            if link.id not in links:
+                links.append(link.id)
+            return {"nodes": nodes, "links": links}
+        else:
+            return self._bfs_node_path(gateway_id, target_id)
+
+    def _bfs_node_path(self, start_id: str, target_id: str) -> Dict[str, List[str]]:
+        """BFS shortest path between two nodes in the topology."""
+        if start_id == target_id:
+            return {"nodes": [start_id], "links": []}
+
+        queue = deque([(start_id, [start_id], [])])
+        visited = {start_id}
+
+        while queue:
+            curr_node, path_nodes, path_links = queue.popleft()
+            if curr_node == target_id:
+                return {"nodes": path_nodes, "links": path_links}
+
+            # Explore outgoing links
+            for link in self.links.values():
+                if link.source == curr_node and link.target not in visited:
+                    visited.add(link.target)
+                    queue.append((
+                        link.target,
+                        path_nodes + [link.target],
+                        path_links + [link.id],
+                    ))
+
+        # Fallback if unreached
+        return {
+            "nodes": [start_id, target_id] if start_id != target_id else [start_id],
+            "links": [],
+        }

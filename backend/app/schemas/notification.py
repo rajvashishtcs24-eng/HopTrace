@@ -62,6 +62,7 @@ class NotificationSendResponse(BaseModel):
     total_targeted: int = Field(..., description="Total target subscriber count")
     sent_count: int = Field(..., description="Successfully dispatched count")
     failed_count: int = Field(..., description="Failed dispatch count")
+    sandboxed_count: int = Field(0, description="Count of notifications routed to sandbox/console")
     deliveries: List[NotificationDeliveryItem] = Field(..., description="Detailed delivery results")
     deduplicated: bool = Field(False, description="True if request was deduplicated via Idempotency-Key")
     batch_id: Optional[str] = Field(None, description="Persisted batch identifier")

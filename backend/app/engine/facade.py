@@ -18,6 +18,9 @@ Adheres strictly to docs/api-contract.md.
 
 from __future__ import annotations
 
+import logging
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,8 +35,10 @@ from .models import (
     RunMeasurementsResponse,
     ScenarioRunResponse,
 )
-from .neo4j_client import get_neo4j_client
+from .neo4j_client import get_neo4j_client, sanitize_last_error
 from .telemetry import RAMP_TICKS, SimulatedTelemetryGenerator
+
+logger = logging.getLogger(__name__)
 
 
 class HopTraceEngine:
@@ -59,18 +64,112 @@ class HopTraceEngine:
         self._ramp: Optional[Dict[str, Any]] = None  # keys: target_link_id, severity, start_tick
         self._tick_counter: int = 0  # monotonic tick counter shared with streaming loop
 
+        # ── Neo4j negative-caching, backoff & fallback tracking ───────────────
+        self._probe_failed_at: float = 0.0  # monotonic timestamp of last probe failure
+        self._backoff_seconds: float = 30.0  # 30s backoff after failure
+        self._neo4j_connected: bool = False
+        self._neo4j_fallback: bool = False
+        self._neo4j_latency_ms: Optional[float] = None
+        self._neo4j_last_error: Optional[str] = None
+
+        # ── Topology cache and lock ───────────────────────────────────────────
+        self._topology_cache: Optional[NetworkTopology] = None
+        self._topology_cache_time: float = 0.0
+        self._topology_lock = threading.Lock()
+
+    def _graph_backend(self) -> str:
+        """Returns the configured graph backend ('auto', 'neo4j', or 'memory')."""
+        try:
+            from app.config import settings
+            return settings.graph_backend.lower().strip()
+        except Exception:
+            return "auto"
+
     def is_neo4j_available(self) -> bool:
-        """Checks if live Neo4j database is accessible."""
-        if not self.prefer_neo4j:
+        """Checks if live Neo4j database is accessible with negative-caching / 30s backoff."""
+        backend = self._graph_backend()
+        if backend == "memory":
+            self._neo4j_connected = False
+            self._neo4j_fallback = False
             return False
-        health = self.neo4j_client.check_connection()
-        return bool(health.get("connected", False))
+
+        # If credentials are not configured, treat as unconfigured (not a fallback failure)
+        is_missing, _ = self.neo4j_client.has_missing_credentials()
+        if is_missing:
+            self._neo4j_connected = False
+            self._neo4j_fallback = False
+            return False
+
+        now = time.monotonic()
+        # Check negative cache (30s backoff if a previous probe failed)
+        if self._probe_failed_at > 0.0 and (now - self._probe_failed_at) < self._backoff_seconds:
+            return False
+
+        t0 = time.monotonic()
+        try:
+            health = self.neo4j_client.check_connection()
+            latency = (time.monotonic() - t0) * 1000.0
+            connected = bool(health.get("connected", False))
+            self._neo4j_connected = connected
+            self._neo4j_latency_ms = round(latency, 1)
+
+            if connected:
+                self._neo4j_fallback = False
+                self._neo4j_last_error = None
+                self._probe_failed_at = 0.0
+                return True
+            else:
+                self._probe_failed_at = now
+                self._neo4j_fallback = True
+                raw_err = health.get("error", "Neo4j connection failed")
+                self._neo4j_last_error = sanitize_last_error(raw_err, client=self.neo4j_client)
+                logger.warning("Neo4j probe failed; entered 30s backoff: %s", self._neo4j_last_error)
+                return False
+        except Exception as exc:
+            self._probe_failed_at = now
+            self._neo4j_connected = False
+            self._neo4j_fallback = True
+            self._neo4j_last_error = sanitize_last_error(exc, client=self.neo4j_client)
+            logger.warning("Neo4j check error; entered 30s backoff: %s", self._neo4j_last_error)
+            return False
 
     def get_active_store(self, force_in_memory: bool = False):
-        """Returns the appropriate graph store (Neo4j if connected, else InMemory)."""
-        if force_in_memory or not self.is_neo4j_available():
+        """Returns the appropriate graph store (Neo4j if connected and not forced, else InMemory)."""
+        backend = self._graph_backend()
+        if force_in_memory or backend == "memory" or not self.is_neo4j_available():
             return self.in_memory_store
         return self.neo4j_store
+
+    def get_graph_status(self) -> Dict[str, Any]:
+        """Returns the current graph backend status for GET /api/v1/graph/status."""
+        backend = self._graph_backend()
+        if backend == "memory":
+            return {
+                "backend": "memory",
+                "fallback": False,
+                "latency_ms": None,
+                "last_error": None,
+                "reason": "configured_as_memory",
+            }
+
+        is_missing, _ = self.neo4j_client.has_missing_credentials()
+        if is_missing:
+            return {
+                "backend": "memory",
+                "fallback": False,
+                "latency_ms": None,
+                "last_error": None,
+                "reason": "not_configured",
+            }
+
+        is_up = self.is_neo4j_available()
+        return {
+            "backend": "neo4j" if is_up else "memory",
+            "fallback": self._neo4j_fallback,
+            "latency_ms": self._neo4j_latency_ms if is_up else None,
+            "last_error": self._neo4j_last_error,
+            "reason": None,
+        }
 
     # ── Ramp state management ────────────────────────────────────────────────
 
@@ -119,26 +218,65 @@ class HopTraceEngine:
         """Seeds the topology idempotently into the active store.
 
         Also always seeds the in-memory mirror for local fallback.
+        Invalidates topology snapshot cache under lock.
         """
         mem_res = self.in_memory_store.seed_topology()
-        if not force_in_memory and self.is_neo4j_available():
+
+        with self._topology_lock:
+            self._topology_cache = None
+            self._topology_cache_time = 0.0
+
+        backend = self._graph_backend()
+        should_seed_neo4j = not force_in_memory and backend != "memory"
+
+        if should_seed_neo4j and self.is_neo4j_available():
             try:
                 neo_res = self.neo4j_store.seed_topology()
                 return neo_res
             except Exception as exc:
+                clean_err = sanitize_last_error(exc, client=self.neo4j_client)
+                logger.warning("Neo4j seed_topology failed, falling back to memory: %s", clean_err)
+                self._neo4j_fallback = True
+                self._neo4j_last_error = clean_err
+                self._probe_failed_at = time.monotonic()
                 return {
                     "status": "seeded_in_memory_fallback",
                     "nodes_count": mem_res["nodes_count"],
                     "links_count": mem_res["links_count"],
                     "subscribers_count": mem_res["subscribers_count"],
-                    "neo4j_error": str(exc),
+                    "neo4j_error": clean_err,
                 }
         return mem_res
 
     def get_topology(self, force_in_memory: bool = False) -> NetworkTopology:
-        """Retrieves the network topology from the active store."""
-        store = self.get_active_store(force_in_memory=force_in_memory)
-        return store.get_topology()
+        """Retrieves the network topology from active store or locked cache."""
+        backend = self._graph_backend()
+        should_use_neo4j = not force_in_memory and backend != "memory"
+
+        if not should_use_neo4j:
+            return self.in_memory_store.get_topology()
+
+        from app.config import settings
+        ttl = getattr(settings, "graph_topology_cache_ttl", 120)
+        now = time.monotonic()
+        with self._topology_lock:
+            if self._topology_cache is not None and (now - self._topology_cache_time) < ttl:
+                return self._topology_cache
+
+            if self.is_neo4j_available():
+                try:
+                    topo = self.neo4j_store.get_topology()
+                    self._topology_cache = topo
+                    self._topology_cache_time = now
+                    return topo
+                except Exception as exc:
+                    clean_err = sanitize_last_error(exc, client=self.neo4j_client)
+                    logger.warning("Neo4j get_topology failed, falling back to in-memory: %s", clean_err)
+                    self._neo4j_fallback = True
+                    self._neo4j_last_error = clean_err
+                    self._probe_failed_at = time.monotonic()
+
+            return self.in_memory_store.get_topology()
 
     def run_scenario(
         self,
@@ -307,7 +445,8 @@ class HopTraceEngine:
         )
         self._persist_run(run_id=run_id, data_source="live", measurements=active_measurements)
 
-        topology = self.get_topology(force_in_memory=True)
+        # Use cached topology snapshot (never hit Neo4j on every probe batch ~5s)
+        topology = self.get_topology()
         incident = self.diagnostic_engine.diagnose(
             measurements=active_measurements,
             topology=topology,
@@ -488,10 +627,21 @@ class HopTraceEngine:
             return AffectedSubscribersResponse(count=0, subscribers=[])
 
         store = self.get_active_store(force_in_memory=force_in_memory)
-        return store.get_affected_subscribers(
-            suspected_component_id=incident.suspected_component_id,
-            component_type=incident.suspected_component_type or "link",
-        )
+        try:
+            return store.get_affected_subscribers(
+                suspected_component_id=incident.suspected_component_id,
+                component_type=incident.suspected_component_type or "link",
+            )
+        except Exception as exc:
+            clean_err = sanitize_last_error(exc, client=self.neo4j_client)
+            logger.warning("Neo4j get_affected_subscribers failed, falling back to memory: %s", clean_err)
+            self._neo4j_fallback = True
+            self._neo4j_last_error = clean_err
+            self._probe_failed_at = time.monotonic()
+            return self.in_memory_store.get_affected_subscribers(
+                suspected_component_id=incident.suspected_component_id,
+                component_type=incident.suspected_component_type or "link",
+            )
 
     def get_run_measurements(self, run_id: str) -> Optional[RunMeasurementsResponse]:
         """Retrieves measurements for a given run ID from memory, falling back to SQLite."""
@@ -633,3 +783,7 @@ def get_run_measurements(run_id: str) -> Optional[RunMeasurementsResponse]:
 
 def check_neo4j_health() -> Dict[str, Any]:
     return get_engine().check_neo4j_health()
+
+
+def get_graph_status() -> Dict[str, Any]:
+    return get_engine().get_graph_status()

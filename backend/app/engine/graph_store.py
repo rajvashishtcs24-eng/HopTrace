@@ -9,7 +9,10 @@ Includes:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+import logging
+import time
+from typing import Any, Dict, List, Optional, Tuple
 from .models import (
     AffectedSubscriber,
     AffectedSubscribersResponse,
@@ -18,14 +21,17 @@ from .models import (
     TopologyNode,
     Subscriber,
 )
-from .neo4j_client import Neo4jClient, get_neo4j_client
+from .neo4j_client import Neo4jClient, get_neo4j_client, sanitize_last_error
 from .topology import (
     InMemoryTopologyGraph,
+    classify_essential,
     get_default_links,
     get_default_nodes,
     get_default_subscribers,
     get_default_topology,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jGraphStore:
@@ -35,7 +41,7 @@ class Neo4jGraphStore:
         self.client = client or get_neo4j_client()
 
     def create_constraints(self) -> None:
-        """Idempotently creates unique constraints for Device and Subscriber nodes."""
+        """Idempotently creates unique constraints and indexes for Device, Subscriber, and Incident nodes."""
         c1 = (
             "CREATE CONSTRAINT device_id_unique IF NOT EXISTS "
             "FOR (d:Device) REQUIRE d.id IS UNIQUE"
@@ -44,12 +50,20 @@ class Neo4jGraphStore:
             "CREATE CONSTRAINT subscriber_id_unique IF NOT EXISTS "
             "FOR (s:Subscriber) REQUIRE s.id IS UNIQUE"
         )
-        try:
-            self.client.execute_write(c1)
-            self.client.execute_write(c2)
-        except Exception:
-            # Fallback gracefully if permissions or older Cypher syntax differ
-            pass
+        c3 = (
+            "CREATE CONSTRAINT incident_id_unique IF NOT EXISTS "
+            "FOR (i:Incident) REQUIRE i.id IS UNIQUE"
+        )
+        c4 = (
+            "CREATE INDEX incident_link_id_index IF NOT EXISTS "
+            "FOR (i:Incident) ON (i.link_id)"
+        )
+        for cypher in (c1, c2, c3, c4):
+            try:
+                self.client.execute_write(cypher)
+            except Exception:
+                # Fallback gracefully if permissions or older Cypher syntax differ
+                pass
 
     def seed_topology(
         self,
@@ -230,32 +244,182 @@ class Neo4jGraphStore:
         Single-path routing: Subscribers do not have alternate redundant paths
         unless explicitly represented in the graph.
         """
-        if component_type == "link":
-            cypher = """
-            MATCH (src:Device)-[rel:LINK {id: $component_id}]->(tgt:Device)
-            MATCH (tgt)-[:LINK*0..]->(ap:Device)-[:SERVES]->(sub:Subscriber)
-            WHERE ap.type = 'access_point'
-            RETURN DISTINCT sub.id AS id, sub.display_name AS display_name, ap.id AS access_point_id
-            ORDER BY sub.id
-            """
-        else:
-            cypher = """
-            MATCH (n:Device {id: $component_id})-[:LINK*0..]->(ap:Device)-[:SERVES]->(sub:Subscriber)
-            WHERE ap.type = 'access_point'
-            RETURN DISTINCT sub.id AS id, sub.display_name AS display_name, ap.id AS access_point_id
-            ORDER BY sub.id
-            """
-
-        records = self.client.execute_query(cypher, {"component_id": suspected_component_id})
+        records, _ = self.get_affected_subscribers_with_query(
+            suspected_component_id=suspected_component_id,
+            component_type=component_type,
+        )
         subs = [
             AffectedSubscriber(
                 id=r["id"],
-                display_name=r["display_name"],
-                access_point_id=r["access_point_id"],
+                display_name=r.get("display_name") or r.get("name", r["id"]),
+                access_point_id=r.get("access_point_id", ""),
             )
             for r in records
         ]
         return AffectedSubscribersResponse(count=len(subs), subscribers=subs)
+
+    def get_affected_subscribers_with_query(
+        self,
+        suspected_component_id: str,
+        component_type: str = "link",
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Traces downstream subscriber dependencies with query metadata and timings.
+
+        Uses LINK*0..10 bounded traversal and no unused variables.
+        """
+        if component_type == "link" or suspected_component_id.startswith("L"):
+            cypher = """
+            MATCH (:Device)-[:LINK {id: $component_id}]->(tgt:Device)
+            MATCH (tgt)-[:LINK*0..10]->(ap:Device {type: 'access_point'})-[:SERVES]->(sub:Subscriber)
+            RETURN DISTINCT sub.id AS id, sub.display_name AS display_name, sub.display_name AS name, ap.id AS access_point_id
+            ORDER BY sub.id
+            """
+        else:
+            cypher = """
+            MATCH (failed:Device {id: $component_id})-[:LINK*0..10]->(ap:Device {type: 'access_point'})-[:SERVES]->(sub:Subscriber)
+            RETURN DISTINCT sub.id AS id, sub.display_name AS display_name, sub.display_name AS name, ap.id AS access_point_id
+            ORDER BY sub.id
+            """
+
+        t0 = time.perf_counter()
+        records = self.client.execute_query(cypher, {"component_id": suspected_component_id})
+        ms = round((time.perf_counter() - t0) * 1000, 2)
+
+        query_meta = {
+            "name": "blast_radius",
+            "cypher": " ".join(cypher.split()),
+            "rows": len(records),
+            "ms": ms,
+        }
+        return records, query_meta
+
+    def get_failure_path(
+        self,
+        component_id: str,
+        component_type: str = "link",
+        gateway_id: str = "GW1",
+    ) -> Tuple[Dict[str, List[str]], Dict[str, Any]]:
+        """Computes shortest path from gateway to the failed component using LINK*..10."""
+        if component_type == "link" or component_id.startswith("L"):
+            cypher = """
+            MATCH (a:Device)-[target_rel:LINK {id: $component_id}]->(b:Device)
+            OPTIONAL MATCH p = shortestPath((gw:Device {id: $gw_id})-[:LINK*..10]->(a))
+            RETURN (CASE WHEN p IS NULL THEN [a.id, b.id] ELSE [n IN nodes(p) | n.id] + [b.id] END) AS nodes,
+                   (CASE WHEN p IS NULL THEN [target_rel.id] ELSE [r IN relationships(p) | r.id] + [target_rel.id] END) AS links
+            """
+            params = {"component_id": component_id, "gw_id": gateway_id}
+        else:
+            cypher = """
+            MATCH (dst:Device {id: $component_id})
+            OPTIONAL MATCH p = shortestPath((gw:Device {id: $gw_id})-[:LINK*..10]->(dst))
+            RETURN (CASE WHEN p IS NULL THEN [dst.id] ELSE [n IN nodes(p) | n.id] END) AS nodes,
+                   (CASE WHEN p IS NULL THEN [] ELSE [r IN relationships(p) | r.id] END) AS links
+            """
+            params = {"component_id": component_id, "gw_id": gateway_id}
+
+        t0 = time.perf_counter()
+        records = self.client.execute_query(cypher, params)
+        ms = round((time.perf_counter() - t0) * 1000, 2)
+
+        if records and records[0].get("nodes"):
+            nodes = records[0]["nodes"]
+            links = records[0].get("links", [])
+        else:
+            nodes = [gateway_id]
+            links = []
+
+        query_meta = {
+            "name": "path",
+            "cypher": " ".join(cypher.split()),
+            "rows": len(records),
+            "ms": ms,
+        }
+        return {"nodes": nodes, "links": links}, query_meta
+
+    def get_incident_history(
+        self,
+        component_id: str,
+        days: int = 30,
+    ) -> Tuple[int, Dict[str, Any]]:
+        """Queries count of incidents on the component in the last 30 days from Neo4j (live incidents only)."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cypher = """
+        MATCH (i:Incident)
+        WHERE (i.link_id = $component_id OR i.component_id = $component_id)
+          AND i.data_source = 'live'
+          AND i.started_at >= $cutoff
+        RETURN count(i) AS incidents_30d
+        """
+        t0 = time.perf_counter()
+        records = self.client.execute_query(cypher, {"component_id": component_id, "cutoff": cutoff})
+        ms = round((time.perf_counter() - t0) * 1000, 2)
+
+        count = 0
+        if records and "incidents_30d" in records[0]:
+            count = int(records[0]["incidents_30d"])
+        elif records:
+            count = len(records)
+
+        query_meta = {
+            "name": "history",
+            "cypher": " ".join(cypher.split()),
+            "rows": len(records),
+            "ms": ms,
+        }
+        return count, query_meta
+
+    def record_incident_node(
+        self,
+        incident_id: str,
+        component_id: str,
+        component_type: str = "link",
+        cause: Optional[str] = None,
+        started_at: Optional[str] = None,
+        resolved_at: Optional[str] = None,
+        subscriber_ids: Optional[List[str]] = None,
+    ) -> bool:
+        """Idempotently records an Incident node and relationships in Neo4j (best effort, non-blocking).
+
+        Writes once per incident (MERGE on id) and tags data_source = 'live'.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        start = started_at or now_iso
+        link_id = component_id if (component_type == "link" or component_id.startswith("L")) else None
+
+        cypher = """
+        MERGE (i:Incident {id: $id})
+        SET i.link_id = $link_id,
+            i.component_id = $component_id,
+            i.cause = $cause,
+            i.data_source = 'live',
+            i.started_at = $started_at,
+            i.resolved_at = $resolved_at
+        WITH i
+        FOREACH (_ IN CASE WHEN $component_id IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (d:Device {id: $component_id})
+            MERGE (i)-[:AT]->(d)
+        )
+        WITH i
+        FOREACH (sub_id IN $subscriber_ids |
+            MERGE (s:Subscriber {id: sub_id})
+            MERGE (i)-[:AFFECTED]->(s)
+        )
+        """
+        params = {
+            "id": incident_id,
+            "link_id": link_id,
+            "component_id": component_id,
+            "cause": cause or "Network degradation",
+            "started_at": start,
+            "resolved_at": resolved_at,
+            "subscriber_ids": subscriber_ids or [],
+        }
+        try:
+            self.client.execute_write(cypher, params)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to record incident node in Neo4j: %s", sanitize_last_error(exc))
+            return False
 
     def delete_isolated_test_data(self, prefix: str = "TEST_") -> None:
         """Removes test nodes and relationships starting with prefix without touching demo topology."""
@@ -329,6 +493,51 @@ class InMemoryGraphStore:
             component_type=component_type,
         )
         return AffectedSubscribersResponse(count=len(subs), subscribers=subs)
+
+    def get_affected_subscribers_with_query(
+        self,
+        suspected_component_id: str,
+        component_type: str = "link",
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """In-memory blast radius returning records and simulated query metadata."""
+        subs = self.graph.get_affected_subscribers(
+            suspected_component_id=suspected_component_id,
+            component_type=component_type,
+        )
+        records = [
+            {
+                "id": s.id,
+                "name": s.display_name,
+                "display_name": s.display_name,
+                "access_point_id": s.access_point_id,
+            }
+            for s in subs
+        ]
+        return records, {
+            "name": "blast_radius",
+            "cypher": "MEMORY_FALLBACK (BFS downstream access points)",
+            "rows": len(records),
+            "ms": 0.0,
+        }
+
+    def get_failure_path(
+        self,
+        component_id: str,
+        component_type: str = "link",
+        gateway_id: str = "GW1",
+    ) -> Tuple[Dict[str, List[str]], Dict[str, Any]]:
+        """Returns failure path from gateway using in-memory BFS."""
+        path_dict = self.graph.get_path_from_gateway(
+            target_id=component_id,
+            component_type=component_type,
+            gateway_id=gateway_id,
+        )
+        return path_dict, {
+            "name": "path",
+            "cypher": "MEMORY_FALLBACK (BFS shortest path)",
+            "rows": len(path_dict.get("nodes", [])),
+            "ms": 0.0,
+        }
 
     def delete_isolated_test_data(self, prefix: str = "TEST_") -> None:
         """Removes test nodes and subscribers starting with prefix."""
