@@ -27,14 +27,17 @@ def test_notification_preview_unknown_incident_404(client: TestClient, isolated_
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_notification_preview_503_when_explanation_unavailable(
+def test_notification_preview_works_when_explanation_unavailable(
     client: TestClient, isolated_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When explanation provider is unavailable, preview returns HTTP 503."""
+    """When explanation provider is unavailable, preview returns HTTP 200 with deterministic templates."""
     monkeypatch.setattr(settings, "explanation_provider", "unavailable")
     response = client.get(f"/api/v1/incidents/{DEMO_INCIDENT_ID}/notifications/preview")
-    assert response.status_code == 503
-    assert "unavailable" in response.json()["detail"].lower()
+    assert response.status_code == 200
+    data = response.json()
+    assert data["incident_id"] == DEMO_INCIDENT_ID
+    assert len(data["previews"]) > 0
+    assert data["previews"][0]["translation_source"] in ("template_hi", "template_en", "fallback_hi")
 
 
 def test_notification_preview_success_localized(

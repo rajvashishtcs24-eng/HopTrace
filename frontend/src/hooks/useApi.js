@@ -165,10 +165,40 @@ export function useApi() {
     }
   }, []);
 
-  const notifyIncident = useCallback(async (incidentId, channel = 'sms') => {
+  const fetchNotificationPreview = useCallback(async (incidentId, { channel = 'sms', messageKind = 'outage' } = {}) => {
+    return api(`/incidents/${incidentId}/notifications/preview?channel=${channel}&kind=${messageKind}`);
+  }, []);
+
+  const fetchNotificationDeliveries = useCallback(async (incidentId, messageKind = null) => {
+    const q = messageKind ? `?kind=${messageKind}` : '';
+    return api(`/incidents/${incidentId}/notifications${q}`);
+  }, []);
+
+  const notifyIncident = useCallback(async (incidentId, options = {}) => {
+    // Support either notifyIncident(id, 'sms') or notifyIncident(id, { channel: 'sms', messageKind: 'outage', subscriberIds: [...] })
+    let channel = 'sms';
+    let messageKind = 'outage';
+    let subscriberIds = null;
+
+    if (typeof options === 'string') {
+      channel = options;
+    } else if (options && typeof options === 'object') {
+      if (options.channel) channel = options.channel;
+      if (options.messageKind || options.message_kind) messageKind = options.messageKind || options.message_kind;
+      if (options.subscriberIds || options.subscriber_ids) subscriberIds = options.subscriberIds || options.subscriber_ids;
+    }
+
+    const payload = {
+      channel,
+      message_kind: messageKind,
+    };
+    if (Array.isArray(subscriberIds) && subscriberIds.length > 0) {
+      payload.subscriber_ids = subscriberIds;
+    }
+
     return api(`/incidents/${incidentId}/notify`, {
       method: 'POST',
-      body: JSON.stringify({ channel }),
+      body: JSON.stringify(payload),
     });
   }, []);
 
@@ -248,6 +278,8 @@ export function useApi() {
     fetchRiskSnapshot,
     fetchBusinessImpact,
     fetchNotificationStatus,
+    fetchNotificationPreview,
+    fetchNotificationDeliveries,
     notifyIncident,
     fetchAgentStatus,
     runPathProbe,

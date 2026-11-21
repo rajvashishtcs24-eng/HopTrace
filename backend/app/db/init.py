@@ -36,6 +36,26 @@ CREATE TABLE IF NOT EXISTS payment_reminders (
     FOREIGN KEY (subscriber_id) REFERENCES subscribers (id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+    id TEXT PRIMARY KEY,
+    incident_id TEXT NOT NULL,
+    subscriber_id TEXT NOT NULL,
+    message_kind TEXT NOT NULL DEFAULT 'outage',
+    channel TEXT NOT NULL DEFAULT 'sms',
+    recipient TEXT,
+    language TEXT NOT NULL DEFAULT 'hi',
+    status TEXT NOT NULL,
+    skip_reason TEXT,
+    message TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    message_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(incident_id, subscriber_id, message_kind),
+    FOREIGN KEY (incident_id) REFERENCES incidents (id) ON DELETE CASCADE,
+    FOREIGN KEY (subscriber_id) REFERENCES subscribers (id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS incidents (
     id TEXT PRIMARY KEY,
     run_id TEXT,
@@ -89,69 +109,69 @@ CREATE TABLE IF NOT EXISTS learned_baselines (
 
 DEMO_SUBSCRIBERS: list[dict[str, Any]] = [
     # Village 1 — Rampur, AP1
-    {"id": "SUB101", "phone": "+91987654SUB101", "preferred_language": "hi", "display_name": "Ramesh Patel — Kishan Kirana Store",
+    {"id": "SUB101", "phone": "+919876543101", "preferred_language": "hi", "display_name": "Ramesh Patel — Kishan Kirana Store",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP1", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB102", "phone": "+91987654SUB102", "preferred_language": "hi", "display_name": "Gram Panchayat e-Seva Kendra",
+    {"id": "SUB102", "phone": "+919876543102", "preferred_language": "hi", "display_name": "Gram Panchayat e-Seva Kendra",
      "plan": "Enterprise", "plan_price": 999.0, "access_point_id": "AP1", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB103", "phone": "+91987654SUB103", "preferred_language": "en", "display_name": "Rampur Co-op Bank Branch",
+    {"id": "SUB103", "phone": "+919876543103", "preferred_language": "en", "display_name": "Rampur Co-op Bank Branch",
      "plan": "Enterprise", "plan_price": 999.0, "access_point_id": "AP1", "status": "active",
      "payment_status": "due", "due_date": "2026-11-01"},
     # Village 1 — Rampur, AP2
-    {"id": "SUB201", "phone": "+91987654SUB201", "preferred_language": "hi", "display_name": "Primary Health Centre Rampur",
+    {"id": "SUB201", "phone": "+919876543201", "preferred_language": "hi", "display_name": "Primary Health Centre Rampur",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP2", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB202", "phone": "+91987654SUB202", "preferred_language": "hi", "display_name": "Govt Secondary School Rampur",
+    {"id": "SUB202", "phone": "+919876543202", "preferred_language": "hi", "display_name": "Govt Secondary School Rampur",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP2", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB203", "phone": "+91987654SUB203", "preferred_language": "hi", "display_name": "Manoj CSC Digital Centre",
+    {"id": "SUB203", "phone": "+919876543203", "preferred_language": "hi", "display_name": "Manoj CSC Digital Centre",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP2", "status": "active",
      "payment_status": "due", "due_date": "2026-10-15"},
-    {"id": "SUB204", "phone": "+91987654SUB204", "preferred_language": "hi", "display_name": "Rampur Ration Shop (PDS)",
+    {"id": "SUB204", "phone": "+919876543204", "preferred_language": "hi", "display_name": "Rampur Ration Shop (PDS)",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP2", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
     # Village 2 — Bhatpur, AP3
-    {"id": "SUB301", "phone": "+91987654SUB301", "preferred_language": "hi", "display_name": "Bhatpur Vegetable Mandi",
+    {"id": "SUB301", "phone": "+919876543301", "preferred_language": "hi", "display_name": "Bhatpur Vegetable Mandi",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP3", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB302", "phone": "+91987654SUB302", "preferred_language": "hi", "display_name": "Bhatpur Milk Collection Point",
+    {"id": "SUB302", "phone": "+919876543302", "preferred_language": "hi", "display_name": "Bhatpur Milk Collection Point",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP3", "status": "active",
      "payment_status": "due", "due_date": "2026-11-01"},
-    {"id": "SUB303", "phone": "+91987654SUB303", "preferred_language": "hi", "display_name": "Bhatpur Village Sarpanch Office",
+    {"id": "SUB303", "phone": "+919876543303", "preferred_language": "hi", "display_name": "Bhatpur Village Sarpanch Office",
      "plan": "Enterprise", "plan_price": 999.0, "access_point_id": "AP3", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
     # Village 2 — Bhatpur, AP4
-    {"id": "SUB401", "phone": "+91987654SUB401", "preferred_language": "hi", "display_name": "Bhatpur Govt Middle School",
+    {"id": "SUB401", "phone": "+919876543401", "preferred_language": "hi", "display_name": "Bhatpur Govt Middle School",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP4", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB402", "phone": "+91987654SUB402", "preferred_language": "hi", "display_name": "Bhatpur Anganwadi Centre",
+    {"id": "SUB402", "phone": "+919876543402", "preferred_language": "hi", "display_name": "Bhatpur Anganwadi Centre",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP4", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB403", "phone": "+91987654SUB403", "preferred_language": "hi", "display_name": "Bhatpur Youth Digital Library",
+    {"id": "SUB403", "phone": "+919876543403", "preferred_language": "hi", "display_name": "Bhatpur Youth Digital Library",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP4", "status": "active",
      "payment_status": "due", "due_date": "2026-10-28"},
     # Village 3 — Daulatpur, AP5
-    {"id": "SUB501", "phone": "+91987654SUB501", "preferred_language": "hi", "display_name": "Daulatpur Haat Bazaar Committee",
+    {"id": "SUB501", "phone": "+919876543501", "preferred_language": "hi", "display_name": "Daulatpur Haat Bazaar Committee",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP5", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB502", "phone": "+91987654SUB502", "preferred_language": "en", "display_name": "Suresh Cold Storage & Agri",
+    {"id": "SUB502", "phone": "+919876543502", "preferred_language": "en", "display_name": "Suresh Cold Storage & Agri",
      "plan": "Enterprise", "plan_price": 999.0, "access_point_id": "AP5", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB503", "phone": "+91987654SUB503", "preferred_language": "hi", "display_name": "Daulatpur CSC e-District Point",
+    {"id": "SUB503", "phone": "+919876543503", "preferred_language": "hi", "display_name": "Daulatpur CSC e-District Point",
      "plan": "Basic", "plan_price": 399.0, "access_point_id": "AP5", "status": "active",
      "payment_status": "due", "due_date": "2026-11-01"},
-    {"id": "SUB504", "phone": "+91987654SUB504", "preferred_language": "en", "display_name": "Daulatpur Police Chowki",
+    {"id": "SUB504", "phone": "+919876543504", "preferred_language": "en", "display_name": "Daulatpur Police Chowki",
      "plan": "Enterprise", "plan_price": 999.0, "access_point_id": "AP5", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
     # Village 3 — Daulatpur, AP6
-    {"id": "SUB601", "phone": "+91987654SUB601", "preferred_language": "hi", "display_name": "PHC Daulatpur — Telemedicine",
+    {"id": "SUB601", "phone": "+919876543601", "preferred_language": "hi", "display_name": "PHC Daulatpur — Telemedicine",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP6", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB602", "phone": "+91987654SUB602", "preferred_language": "hi", "display_name": "Daulatpur Sub-District Hospital",
+    {"id": "SUB602", "phone": "+919876543602", "preferred_language": "hi", "display_name": "Daulatpur Sub-District Hospital",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP6", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
-    {"id": "SUB604", "phone": "+91987654SUB604", "preferred_language": "hi", "display_name": "Daulatpur Govt ITI College",
+    {"id": "SUB604", "phone": "+919876543604", "preferred_language": "hi", "display_name": "Daulatpur Govt ITI College",
      "plan": "Community", "plan_price": 0.0, "access_point_id": "AP6", "status": "active",
      "payment_status": "paid", "due_date": "2026-11-15"},
 ]
@@ -248,7 +268,11 @@ def init_db(
                 ) VALUES (
                     :id, :display_name, :plan, :plan_price, :phone, :preferred_language, :access_point_id, :status, :payment_status, :due_date
                 )
-                ON CONFLICT(id) DO NOTHING;
+                ON CONFLICT(id) DO UPDATE SET
+                    phone = excluded.phone,
+                    display_name = excluded.display_name,
+                    preferred_language = excluded.preferred_language,
+                    access_point_id = excluded.access_point_id;
                 """,
                 DEMO_SUBSCRIBERS,
             )

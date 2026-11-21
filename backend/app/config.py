@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     # "twilio"      – Twilio SMS / WhatsApp delivery
     notification_provider: str = "unavailable"
 
+    # Twilio safety filters:
+    # Comma-separated list of E.164 phone numbers allowed for live outbound dispatch (e.g. "+919876543200")
+    # Empty string means no allowlist filtering (all live valid E.164 numbers allowed)
+    notify_allowlist: str = ""
+    # Maximum recipients permitted per dispatch request
+    notify_max_recipients: int = 50
+
     # --- Twilio (used when NOTIFICATION_PROVIDER=twilio) ---
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

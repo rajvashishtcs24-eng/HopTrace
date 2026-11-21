@@ -14,8 +14,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 import sqlite3
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ from app.db.repository import (
     get_latest_incident,
     get_latest_open_incident,
     get_subscribers_by_ids,
+    get_subscribers_sent_outage,
+    list_notification_deliveries,
 )
 from app.engine.facade import get_incident_details, get_latest_incident as get_engine_latest_incident
 from app.providers.dependencies import (
@@ -51,6 +53,7 @@ from app.schemas.incident import (
     IncidentResponse,
 )
 from app.schemas.notification import (
+    NotificationDeliveriesListResponse,
     NotificationDeliveryItem,
     NotificationPreviewItem,
     NotificationPreviewResponse,
@@ -60,6 +63,7 @@ from app.schemas.notification import (
 from app.services.outage_notifier import (
     dispatch_outage_notifications,
     generate_notification_previews,
+    mask_phone,
 )
 
 router = APIRouter(tags=["incidents"])
@@ -384,12 +388,15 @@ def reconcile_notify_recipients(
     summary="Preview outage notifications for affected subscribers",
     description=(
         "Builds localized notification messages for affected subscribers in their "
-        "preferred languages using the configured explanation provider."
+        "preferred languages using deterministic templates and optional Sarvam translation. "
+        "Works when provider is unconfigured (returns HTTP 200 with provider_available=False)."
     ),
 )
 def preview_incident_notifications(
     incident_id: str,
     channel: str = "sms",
+    kind: Optional[str] = Query(None, description="Alert kind: outage or restoration"),
+    message_kind: Optional[str] = Query(None, description="Alert kind: outage or restoration"),
     db: sqlite3.Connection = Depends(get_db),
     adapter: DependencyAnalysisAdapter = Depends(get_dependency_adapter),
 ) -> NotificationPreviewResponse:
@@ -401,20 +408,30 @@ def preview_incident_notifications(
             detail=f"Incident '{incident_id}' not found",
         )
 
-    # 2. Check explanation provider
-    try:
-        explanation_provider = get_explanation_provider()
-        if explanation_provider.provider_name == "unavailable":
-            raise ExplanationProviderUnavailableError(
-                "Explanation provider is unavailable or not configured"
-            )
-    except ExplanationProviderUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    target_kind = (kind or message_kind or "outage").lower()
+    if target_kind not in ("outage", "restoration"):
+        target_kind = "outage"
 
-    # 3. Determine affected subscribers & perform two-way reconciliation with SQLite
+    # 2. Check notification provider (preview works even when unconfigured)
+    notif_provider_name = "unavailable"
+    provider_available = False
+    try:
+        notif_provider = get_notification_provider()
+        notif_provider_name = notif_provider.provider_name
+        provider_available = (notif_provider_name != "unavailable")
+    except Exception:
+        pass
+
+    # 3. Check explanation provider (optional, falls back gracefully to hi/en deterministic templates)
+    explanation_provider = None
+    try:
+        expl_candidate = get_explanation_provider()
+        if expl_candidate.provider_name != "unavailable":
+            explanation_provider = expl_candidate
+    except Exception:
+        pass
+
+    # 4. Determine affected subscribers & perform two-way reconciliation with SQLite
     try:
         raw_subs = adapter.get_affected_subscribers(
             incident_id=incident_id,
@@ -434,23 +451,26 @@ def preview_incident_notifications(
         suspected_component_id=incident.get("suspected_component_id"),
     )
 
-    # 4. Generate previews
-    try:
-        previews_data = generate_notification_previews(
-            incident=incident,
-            subscribers=enriched_subs,
-            explanation_provider=explanation_provider,
-            channel=channel,
-        )
-    except ExplanationProviderUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    # 5. Restoration messages default to subscribers whose outage message was sent
+    if target_kind == "restoration":
+        sent_outage_subs = get_subscribers_sent_outage(db, incident_id)
+        enriched_subs = [s for s in enriched_subs if s.get("id") in sent_outage_subs]
+
+    # 6. Generate previews
+    previews_data = generate_notification_previews(
+        incident=incident,
+        subscribers=enriched_subs,
+        explanation_provider=explanation_provider,
+        channel=channel,
+        message_kind=target_kind,
+    )
 
     return NotificationPreviewResponse(
         incident_id=incident_id,
         channel=channel,
+        message_kind=target_kind,
+        provider=notif_provider_name,
+        provider_available=provider_available,
         affected_subscribers_count=len(previews_data),
         previews=[NotificationPreviewItem(**p) for p in previews_data],
     )
@@ -469,13 +489,6 @@ def get_notification_provider_status() -> dict[str, Any]:
                 "available": False,
                 "provider": notif_provider.provider_name,
                 "reason": "Outage notification provider is not configured. Set NOTIFICATION_PROVIDER=console or twilio.",
-            }
-        expl_provider = get_explanation_provider()
-        if expl_provider.provider_name == "unavailable":
-            return {
-                "available": False,
-                "provider": notif_provider.provider_name,
-                "reason": "Explanation provider is not configured. Set EXPLANATION_PROVIDER=simulated or sarvam.",
             }
         return {
             "available": True,
@@ -514,7 +527,7 @@ def send_incident_notifications(
             detail=f"Incident '{incident_id}' not found",
         )
 
-    # 2. Check notification provider
+    # 2. Check notification provider (must be configured to send)
     try:
         notif_provider = get_notification_provider()
         if notif_provider.provider_name == "unavailable":
@@ -527,18 +540,18 @@ def send_incident_notifications(
             detail=str(exc),
         ) from exc
 
-    # 3. Check explanation provider
+    # 3. Check explanation provider (optional, fallback to deterministic templates)
+    explanation_provider = None
     try:
-        explanation_provider = get_explanation_provider()
-        if explanation_provider.provider_name == "unavailable":
-            raise ExplanationProviderUnavailableError(
-                "Explanation provider is unavailable or not configured"
-            )
-    except ExplanationProviderUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+        expl_candidate = get_explanation_provider()
+        if expl_candidate.provider_name != "unavailable":
+            explanation_provider = expl_candidate
+    except Exception:
+        pass
+
+    target_kind = (payload.message_kind if payload and payload.message_kind else "outage").lower()
+    if target_kind not in ("outage", "restoration"):
+        target_kind = "outage"
 
     # 4. Determine affected subscribers
     try:
@@ -562,18 +575,26 @@ def send_incident_notifications(
         raw_subs=raw_subs,
         suspected_component_id=incident.get("suspected_component_id"),
     )
+
+    # Restoration messages default to subscribers whose outage message was sent
+    if target_kind == "restoration" and not (payload and payload.subscriber_ids):
+        sent_outage_subs = get_subscribers_sent_outage(db, incident_id)
+        enriched_subs = [s for s in enriched_subs if s.get("id") in sent_outage_subs]
+
     if payload and payload.subscriber_ids:
         target_ids = set(payload.subscriber_ids)
         enriched_subs = [s for s in enriched_subs if s.get("id") in target_ids]
 
-    # 5. Dispatch notifications
+    # 5. Dispatch notifications with atomic SQLite claim & idempotency
     try:
         dispatch_res = dispatch_outage_notifications(
             incident=incident,
             subscribers=enriched_subs,
             notification_provider=notif_provider,
+            db_conn=db,
             explanation_provider=explanation_provider,
             channel=channel,
+            message_kind=target_kind,
         )
     except NotificationProviderUnavailableError as exc:
         raise HTTPException(
@@ -585,8 +606,78 @@ def send_incident_notifications(
         incident_id=incident_id,
         provider=dispatch_res["provider"],
         channel=dispatch_res["channel"],
+        message_kind=target_kind,
         total_targeted=dispatch_res["total_targeted"],
         sent_count=dispatch_res["sent_count"],
         failed_count=dispatch_res["failed_count"],
+        skipped_count=dispatch_res.get("skipped_count", 0),
         deliveries=[NotificationDeliveryItem(**d) for d in dispatch_res["deliveries"]],
+    )
+
+
+@router.get(
+    "/incidents/{incident_id}/notifications",
+    response_model=NotificationDeliveriesListResponse,
+    summary="Get delivery history of notifications for an incident",
+    description="Returns persisted delivery records for an incident with masked phone numbers for privacy audit.",
+)
+def get_incident_notifications(
+    incident_id: str,
+    kind: Optional[str] = Query(None, description="Filter by outage or restoration"),
+    message_kind: Optional[str] = Query(None, description="Filter by outage or restoration"),
+    db: sqlite3.Connection = Depends(get_db),
+) -> NotificationDeliveriesListResponse:
+    incident = get_incident(db, incident_id)
+    if incident is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found",
+        )
+
+    target_kind = kind or message_kind
+    records = list_notification_deliveries(db, incident_id, message_kind=target_kind)
+    deliveries = []
+    sent_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    for r in records:
+        st = r["status"]
+        if st in ("sent", "simulated"):
+            sent_count += 1
+        elif st == "failed":
+            failed_count += 1
+        elif st == "skipped":
+            skipped_count += 1
+
+        prov = r.get("provider") or "console"
+        human_status = (
+            "simulated (not delivered)"
+            if prov == "console" and st in ("sent", "simulated")
+            else (f"skipped ({r.get('skip_reason')})" if st == "skipped" else st)
+        )
+        deliveries.append(
+            NotificationDeliveryItem(
+                subscriber_id=r["subscriber_id"],
+                recipient=mask_phone(r.get("recipient")),
+                status=st,
+                delivery_status=human_status,
+                skip_reason=r.get("skip_reason"),
+                message_id=r.get("message_id"),
+                message_kind=r.get("message_kind") or "outage",
+                channel=r.get("channel") or "sms",
+                provider=prov,
+                message=r.get("message") or "",
+                error=r.get("skip_reason") if st == "failed" else None,
+                created_at=r.get("created_at"),
+            )
+        )
+
+    return NotificationDeliveriesListResponse(
+        incident_id=incident_id,
+        total_count=len(deliveries),
+        sent_count=sent_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        deliveries=deliveries,
     )

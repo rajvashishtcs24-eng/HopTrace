@@ -6,6 +6,7 @@ import {
   formatRevenue,
   getNextStep,
 } from './networkStatusHelpers';
+import NotifyModal from './IncidentPanel/NotifyModal';
 
 export default function NetworkStatusBanner() {
   const activeIncident = useStore(s => s.activeIncident);
@@ -25,6 +26,7 @@ export default function NetworkStatusBanner() {
   });
   const [notifying, setNotifying] = useState(false);
   const [notified, setNotified] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [, setTick] = useState(0);
 
   // Live timer tick during active fault
@@ -243,34 +245,12 @@ export default function NetworkStatusBanner() {
           <div className="flex items-center">
             <button
               type="button"
-              onClick={handleNotify}
-              disabled={!isAvailable || notifying}
+              onClick={() => setModalOpen(true)}
               title={tooltipText}
-              aria-disabled={!isAvailable || notifying}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-md ${
-                notified
-                  ? 'bg-emerald-700 text-white cursor-default'
-                  : isAvailable
-                  ? 'bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 cursor-pointer shadow-amber-500/20'
-                  : 'bg-slate-800/80 border border-slate-700 text-slate-400 cursor-not-allowed opacity-60'
-              }`}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-md bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 cursor-pointer shadow-amber-500/20"
             >
-              {notifying ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin shrink-0" />
-                  <span>Sending notifications…</span>
-                </>
-              ) : notified ? (
-                <>
-                  <span>✓</span>
-                  <span>Notifications Sent</span>
-                </>
-              ) : (
-                <>
-                  <span>📢</span>
-                  <span>Notify affected subscribers</span>
-                </>
-              )}
+              <span>📢</span>
+              <span>Notify affected subscribers</span>
             </button>
           </div>
         </div>
@@ -283,6 +263,14 @@ export default function NetworkStatusBanner() {
           </div>
         )}
       </aside>
+
+      {/* Outage Notification Review & Dispatch Modal */}
+      <NotifyModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        incident={activeIncident}
+        initialKind="outage"
+      />
     </>
   );
 }

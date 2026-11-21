@@ -1,8 +1,8 @@
 # HopTrace Test Counts & Quality Gate Report
 
-Generated at: 2026-11-21 17:00 IST  
+Generated at: 2026-11-21 17:30 IST  
 Branch: `feat/neo4j-n1-n2`  
-Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intelligence)
+Integrated Tracks: N0–N2 (Neo4j Graph Database Integration) & B1 (Subscriber Outage & Restoration Notification Flow)
 
 ---
 
@@ -10,17 +10,29 @@ Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intellig
 
 | Test Suite | Total Tests | Passed | Failed | Skipped | Pass Rate | Execution Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 329 | **324** | 0 | 5* | **100%** | ~18s |
-| **Frontend Unit Tests (node --test)** | 57 | **57** | 0 | 0 | **100%** | ~0.2s |
+| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 339 | **334** | 0 | 5* | **100%** | ~14.8s |
+| **Frontend Unit Tests (node --test)** | 68 | **68** | 0 | 0 | **100%** | ~0.18s |
 | **Frontend Code Quality (ESLint)** | All files | **0 errors** | 0 warnings | - | **100%** | ~15s |
-| **Combined Full-Stack Total** | **386** | **381** | **0** | **5** | **100%** | - |
+| **Combined Full-Stack Total** | **407** | **402** | **0** | **5** | **100%** | - |
 
 *\*Note on Skipped Tests (5 tests):*  
 All 5 skipped tests are live Neo4j Aura database integration and parity tests (`@pytest.mark.integration` in `tests/engine/test_neo4j_integration.py` and `tests/engine/test_graph_n2_parity.py`). They skip cleanly when `NEO4J_URI` is not configured, and execute automatically against a live Neo4j Aura or container instance when credentials are provided.
 
 ---
 
-## 1. Backend Test Breakdown (`python -m pytest tests -v`) — 329 Tests
+## 1. Backend Test Breakdown (`python -m pytest tests -v`) — 339 Tests
+
+### Track B1: Outage & Restoration Notification Flow (`tests/api/test_b1_notify_flow.py`) - 10 Tests PASS
+- `test_parallel_sends_atomic_idempotency_claim`: Parallel sends and atomic SQLite idempotency claim (no duplicate dispatch, UNIQUE constraint safe)
+- `test_failed_send_retry`: Failed send retry (failed row is re-claimed and updated to sent)
+- `test_resend_after_phone_correction`: Resend after phone correction (skipped invalid_e164_phone re-claimed and sent)
+- `test_provider_error_mid_batch_does_not_abort`: Provider error mid-batch (sub 1 sent, sub 2 failed, sub 3 sent; batch does not abort)
+- `test_simulated_incident_with_twilio_configured_is_blocked`: Simulated incident with Twilio configured (Twilio call blocked, skipped with simulated_incident_twilio_blocked)
+- `test_twilio_allowlist_enforcement`: Allowlist enforcement (NOTIFY_ALLOWLIST allows listed numbers, skips others with not_in_allowlist)
+- `test_phone_masking_in_preview_and_history`: Phone masking in all GET responses (/preview and /notifications)
+- `test_preview_works_when_unconfigured_while_send_returns_503`: Preview when unconfigured (returns HTTP 200, only POST /notify returns HTTP 503)
+- `test_restoration_defaults_to_subscribers_sent_outage`: Restoration default recipient filtering (defaults to subscribers sent outage message)
+- `test_max_recipients_cap`: Max recipients cap enforcement (NOTIFY_MAX_RECIPIENTS)
 
 ### Agent Tests (`tests/agent/`) - 15 Tests
 - `tests/agent/test_agent_field_hardening.py`:
@@ -90,7 +102,12 @@ All 5 skipped tests are live Neo4j Aura database integration and parity tests (`
 
 ---
 
-## 2. Frontend Test Breakdown (`node --test ...`) - 57 Tests
+## 2. Frontend Test Breakdown (`node --test ...`) - 68 Tests
+
+### Network Status Banner & Operations (`frontend/src/components/NetworkStatusBanner.test.js`) - 11 Tests
+- `formatElapsed`: Elapsed time calculations, formatting seconds, minutes, and hours.
+- `formatRevenue`: Indian Rupee INR localized currency formatting.
+- `getNextStep`: Actionable next steps derived from field operator recommendations, AI explanations, and diagnostic heuristic fallbacks.
 
 ### View Preferences & Storage (`frontend/src/components/NetworkView/viewPref.test.js`) - 6 Tests
 - Default view recovery, valid storage retrieval, fallback on invalid storage, fault tolerance when `localStorage` throws.

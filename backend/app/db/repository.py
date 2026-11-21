@@ -580,3 +580,189 @@ def list_runs(conn: sqlite3.Connection, limit: int = 50) -> list[dict[str, Any]]
         (limit,),
     )
     return [dict(row) for row in cursor.fetchall()]
+
+
+# ── Notification Delivery Persistence & Idempotency ──────────────────────────
+
+def claim_notification_delivery(
+    conn: sqlite3.Connection,
+    incident_id: str,
+    subscriber_id: str,
+    message_kind: str,
+    channel: str,
+    recipient: str,
+    language: str,
+    message: str,
+    provider: str,
+    now_iso: str,
+) -> tuple[str, bool, dict[str, Any] | None]:
+    """Atomically claims a notification delivery record for (incident_id, subscriber_id, message_kind).
+
+    Rules:
+    - If row already exists with status 'sent':
+      Returns (existing_id, False, existing_dict). Resend is blocked.
+    - If row already exists with status 'queued' within the last 5 minutes:
+      Returns (existing_id, False, existing_dict). In-flight send is blocked.
+    - If row exists with status 'failed', 'skipped', or stale queued (>= 5 mins):
+      Updates row to status 'queued' and claims it: returns (existing_id, True, None).
+    - If no row exists:
+      Inserts atomically with ON CONFLICT DO NOTHING. If inserted: returns (new_id, True, None).
+      If conflict occurred concurrently: returns (existing_id, False, existing_dict).
+    """
+    row = conn.execute(
+        """
+        SELECT id, incident_id, subscriber_id, message_kind, channel, recipient,
+               language, status, skip_reason, message, provider, message_id,
+               created_at, updated_at
+        FROM notification_deliveries
+        WHERE incident_id = ? AND subscriber_id = ? AND message_kind = ?;
+        """,
+        (incident_id, subscriber_id, message_kind),
+    ).fetchone()
+
+    if row is not None:
+        rec = dict(row)
+        existing_status = rec["status"]
+        if existing_status in ("sent", "simulated"):
+            return rec["id"], False, rec
+
+        if existing_status == "queued":
+            try:
+                updated_dt = datetime.fromisoformat(rec["updated_at"].replace("Z", "+00:00"))
+                now_dt = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+                age_seconds = (now_dt - updated_dt).total_seconds()
+            except Exception:
+                age_seconds = 0
+            if age_seconds < 300:  # Less than 5 minutes: in-flight claim
+                return rec["id"], False, rec
+
+        # Retryable: failed, skipped, or stale queued
+        conn.execute(
+            """
+            UPDATE notification_deliveries
+            SET status = 'queued',
+                recipient = ?,
+                channel = ?,
+                language = ?,
+                message = ?,
+                provider = ?,
+                skip_reason = NULL,
+                updated_at = ?
+            WHERE id = ?;
+            """,
+            (recipient, channel, language, message, provider, now_iso, rec["id"]),
+        )
+        conn.commit()
+        return rec["id"], True, None
+
+    # No existing row: atomic insert
+    delivery_id = f"notif-{uuid.uuid4().hex[:12]}"
+    cursor = conn.execute(
+        """
+        INSERT INTO notification_deliveries (
+            id, incident_id, subscriber_id, message_kind, channel, recipient,
+            language, status, skip_reason, message, provider, message_id,
+            created_at, updated_at
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?,
+            ?, 'queued', NULL, ?, ?, NULL,
+            ?, ?
+        )
+        ON CONFLICT(incident_id, subscriber_id, message_kind) DO NOTHING;
+        """,
+        (
+            delivery_id, incident_id, subscriber_id, message_kind, channel, recipient,
+            language, message, provider, now_iso, now_iso
+        ),
+    )
+    conn.commit()
+    if cursor.rowcount == 1:
+        return delivery_id, True, None
+
+    # Race condition: another thread inserted concurrently
+    row = conn.execute(
+        """
+        SELECT id, incident_id, subscriber_id, message_kind, channel, recipient,
+               language, status, skip_reason, message, provider, message_id,
+               created_at, updated_at
+        FROM notification_deliveries
+        WHERE incident_id = ? AND subscriber_id = ? AND message_kind = ?;
+        """,
+        (incident_id, subscriber_id, message_kind),
+    ).fetchone()
+    return (dict(row)["id"], False, dict(row)) if row else (delivery_id, False, None)
+
+
+def update_notification_delivery(
+    conn: sqlite3.Connection,
+    delivery_id: str,
+    status: str,
+    provider_message_id: str | None = None,
+    skip_reason: str | None = None,
+    now_iso: str | None = None,
+) -> None:
+    """Updates the delivery status of a claimed notification record."""
+    now = now_iso or datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        UPDATE notification_deliveries
+        SET status = ?,
+            message_id = COALESCE(?, message_id),
+            skip_reason = ?,
+            updated_at = ?
+        WHERE id = ?;
+        """,
+        (status, provider_message_id, skip_reason, now, delivery_id),
+    )
+    conn.commit()
+
+
+def list_notification_deliveries(
+    conn: sqlite3.Connection,
+    incident_id: str,
+    message_kind: str | None = None,
+) -> list[dict[str, Any]]:
+    """Lists persisted delivery records for an incident ordered by created_at ASC."""
+    if message_kind:
+        cursor = conn.execute(
+            """
+            SELECT id, incident_id, subscriber_id, message_kind, channel, recipient,
+                   language, status, skip_reason, message, provider, message_id,
+                   created_at, updated_at
+            FROM notification_deliveries
+            WHERE incident_id = ? AND message_kind = ?
+            ORDER BY created_at ASC;
+            """,
+            (incident_id, message_kind),
+        )
+    else:
+        cursor = conn.execute(
+            """
+            SELECT id, incident_id, subscriber_id, message_kind, channel, recipient,
+                   language, status, skip_reason, message, provider, message_id,
+                   created_at, updated_at
+            FROM notification_deliveries
+            WHERE incident_id = ?
+            ORDER BY created_at ASC;
+            """,
+            (incident_id,),
+        )
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def get_subscribers_sent_outage(
+    conn: sqlite3.Connection,
+    incident_id: str,
+) -> set[str]:
+    """Returns subscriber IDs who were actually sent an outage alert for this incident."""
+    cursor = conn.execute(
+        """
+        SELECT DISTINCT subscriber_id
+        FROM notification_deliveries
+        WHERE incident_id = ?
+          AND message_kind = 'outage'
+          AND status IN ('sent', 'simulated');
+        """,
+        (incident_id,),
+    )
+    return {row[0] for row in cursor.fetchall()}

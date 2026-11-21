@@ -316,6 +316,7 @@ def run_lab_scenario(
                                 incident=inc_dict,
                                 subscribers=target_subs,
                                 notification_provider=notif_prov,
+                                db_conn=db,
                                 explanation_provider=expl_prov,
                                 channel="sms",
                             )

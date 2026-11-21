@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import useStore from '../../store/appStore';
 import { useApi } from '../../hooks/useApi';
 import HopTraceStrip from './HopTraceStrip';
+import NotifyModal from './NotifyModal';
 
 const SEV_COLORS = {
   critical: 'bg-red-900 border-red-600 text-red-300',
@@ -142,6 +143,8 @@ export default function IncidentPanel() {
   const sarvamLanguage = useStore(s => s.sarvamLanguage);
   const { explainIncident } = useApi();
   const [explainError, setExplainError] = useState(null);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [notifyKind, setNotifyKind] = useState('outage');
 
   const elapsed = useElapsedTime(activeIncident?.created_at);
 
@@ -354,23 +357,44 @@ export default function IncidentPanel() {
         )}
       </div>
 
-      {/* Explain button */}
-      <div className="px-3 pb-3 pt-1 border-t border-slate-800">
-        <button
-          onClick={handleExplain}
-          disabled={aiLoading}
-          className="w-full py-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-        >
-          {aiLoading ? (
-            <>
-              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Generating AI Analysis...
-            </>
-          ) : (
-            `🤖 Explain in ${sarvamLanguage.toUpperCase()} via Sarvam AI`
-          )}
-        </button>
+      {/* Action buttons */}
+      <div className="px-3 pb-3 pt-2 border-t border-slate-800 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleExplain}
+            disabled={aiLoading}
+            className="py-2 px-3 bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            {aiLoading ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Explaining...</span>
+              </>
+            ) : (
+              <span>🤖 Explain ({sarvamLanguage.toUpperCase()})</span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setNotifyKind(activeIncident.status === 'resolved' ? 'restoration' : 'outage');
+              setNotifyOpen(true);
+            }}
+            className="py-2 px-3 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20"
+          >
+            <span>📢</span>
+            <span>{activeIncident.status === 'resolved' ? 'Notify Restoration' : 'Notify Subscribers'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Outage & Restoration Notification Modal */}
+      <NotifyModal
+        isOpen={notifyOpen}
+        onClose={() => setNotifyOpen(false)}
+        incident={activeIncident}
+        initialKind={notifyKind}
+      />
     </div>
   );
 }
