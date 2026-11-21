@@ -11,10 +11,13 @@ Follows docs/api-contract.md Sections 4, 5, and 6.
 """
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timezone
+import logging
+import sqlite3
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.db.connection import get_db
@@ -358,9 +361,15 @@ def preview_incident_notifications(
     if sub_ids:
         full_subs = get_subscribers_by_ids(db, sub_ids)
         subs_map = {s["id"]: s for s in full_subs}
-        enriched_subs = [subs_map.get(s["id"], s) for s in raw_subs]
+        for s in raw_subs:
+            sid = s.get("id")
+            if sid and sid not in subs_map:
+                logger.warning(
+                    "Subscriber ID %s from graph not found in SQLite subscribers table", sid
+                )
+        enriched_subs = [subs_map[s["id"]] for s in raw_subs if s.get("id") in subs_map]
     else:
-        enriched_subs = raw_subs
+        enriched_subs = []
 
     # 4. Generate previews
     try:
@@ -491,9 +500,15 @@ def send_incident_notifications(
     if sub_ids:
         full_subs = get_subscribers_by_ids(db, sub_ids)
         subs_map = {s["id"]: s for s in full_subs}
-        enriched_subs = [subs_map.get(s["id"], s) for s in raw_subs]
+        for s in raw_subs:
+            sid = s.get("id")
+            if sid and sid not in subs_map:
+                logger.warning(
+                    "Subscriber ID %s from graph not found in SQLite subscribers table", sid
+                )
+        enriched_subs = [subs_map[s["id"]] for s in raw_subs if s.get("id") in subs_map]
     else:
-        enriched_subs = raw_subs
+        enriched_subs = []
 
     # 5. Dispatch notifications
     try:
