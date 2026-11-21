@@ -223,6 +223,7 @@ def get_incident_history_30d(
     """Returns count of incidents involving this component within the last N days.
 
     Authoritative SQLite fallback when Neo4j is unavailable.
+    Counts strictly data_source = 'live' incidents (simulated incidents return 0).
     """
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     cursor = conn.execute(
@@ -230,6 +231,7 @@ def get_incident_history_30d(
         SELECT count(*)
         FROM incidents
         WHERE (suspected_component_id = ? OR id = ?)
+          AND data_source = 'live'
           AND created_at >= ?;
         """,
         (component_id, component_id, cutoff),

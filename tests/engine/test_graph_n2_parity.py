@@ -124,3 +124,65 @@ def test_node_failure_parity(live_neo4j_store: Neo4jGraphStore, memory_store: In
     assert mem_ids == ["TEST_SUB101", "TEST_SUB102"]
     assert neo_ids == mem_ids
     assert neo_resp.count == mem_resp.count
+
+
+@pytest.mark.integration
+def test_record_incident_node_and_affected_relationships_live(
+    live_neo4j_store: Neo4jGraphStore,
+) -> None:
+    """Requirement: Confirm Subscriber nodes are seeded, so :AFFECTED relationships
+
+    in record_incident_node actually get created. Writes an incident and reads it back.
+    """
+    # 1. Verify Subscriber nodes are present in Neo4j from seed_topology
+    sub_check_cypher = (
+        "MATCH (s:Subscriber) WHERE s.id STARTS WITH 'TEST_' "
+        "RETURN s.id AS id ORDER BY s.id"
+    )
+    seeded_subs = [
+        r["id"]
+        for r in live_neo4j_store.client.execute_query(sub_check_cypher)
+    ]
+    assert "TEST_SUB101" in seeded_subs
+    assert "TEST_SUB102" in seeded_subs
+
+    # 2. Write an incident node with :AT and :AFFECTED relationships
+    test_inc_id = "TEST_INC_RECORD_READBACK_001"
+    target_subs = ["TEST_SUB101", "TEST_SUB102"]
+
+    success = live_neo4j_store.record_incident_node(
+        incident_id=test_inc_id,
+        component_id="TEST_L3",
+        component_type="link",
+        cause="Live optical bridge degradation",
+        subscriber_ids=target_subs,
+    )
+    assert success is True
+
+    try:
+        # 3. Read back the incident node and verify relationships
+        readback_cypher = """
+        MATCH (i:Incident {id: $inc_id})
+        OPTIONAL MATCH (i)-[:AT]->(d:Device)
+        OPTIONAL MATCH (i)-[:AFFECTED]->(s:Subscriber)
+        RETURN i.id AS inc_id,
+               i.link_id AS link_id,
+               i.data_source AS data_source,
+               i.cause AS cause,
+               collect(DISTINCT s.id) AS affected_subs
+        """
+        records = live_neo4j_store.client.execute_query(readback_cypher, {"inc_id": test_inc_id})
+        assert len(records) == 1
+        rec = records[0]
+
+        assert rec["inc_id"] == test_inc_id
+        assert rec["link_id"] == "TEST_L3"
+        assert rec["data_source"] == "live"
+        assert sorted(rec["affected_subs"]) == sorted(target_subs)
+    finally:
+        # Cleanup written incident
+        cleanup_cypher = "MATCH (i:Incident {id: $inc_id}) DETACH DELETE i"
+        try:
+            live_neo4j_store.client.execute_write(cleanup_cypher, {"inc_id": test_inc_id})
+        except Exception:
+            pass

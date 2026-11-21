@@ -1,8 +1,8 @@
 # HopTrace Test Counts & Quality Gate Report
 
-Generated at: 2026-11-21 15:10 IST  
-Git Tag: `finale-start`  
-Merged HEAD: `main` (Integrated with Predictive Fault AI Benchmark Evaluation)
+Generated at: 2026-11-21 17:00 IST  
+Branch: `feat/neo4j-n1-n2`  
+Integrated Tracks: N0–N2 (Neo4j Graph Database Integration & Incident Intelligence)
 
 ---
 
@@ -10,16 +10,17 @@ Merged HEAD: `main` (Integrated with Predictive Fault AI Benchmark Evaluation)
 
 | Test Suite | Total Tests | Passed | Failed | Skipped | Pass Rate | Execution Time |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 309 | **307** | 0 | 2* | **100%** | 22.49s |
-| **Frontend Unit Tests (node --test)** | 57 | **57** | 0 | 0 | **100%** | 0.33s |
+| **Backend Unit, Integration & Predictive Benchmarks (pytest)** | 329 | **324** | 0 | 5* | **100%** | ~18s |
+| **Frontend Unit Tests (node --test)** | 57 | **57** | 0 | 0 | **100%** | ~0.2s |
 | **Frontend Code Quality (ESLint)** | All files | **0 errors** | 0 warnings | - | **100%** | ~15s |
-| **Combined Full-Stack Total** | **366** | **364** | **0** | **2** | **100%** | - |
+| **Combined Full-Stack Total** | **386** | **381** | **0** | **5** | **100%** | - |
 
-*\*Note: 2 skipped tests require live physical network interface hardware (tun/tap).*
+*\*Note on Skipped Tests (5 tests):*  
+All 5 skipped tests are live Neo4j Aura database integration and parity tests (`@pytest.mark.integration` in `tests/engine/test_neo4j_integration.py` and `tests/engine/test_graph_n2_parity.py`). They skip cleanly when `NEO4J_URI` is not configured, and execute automatically against a live Neo4j Aura or container instance when credentials are provided.
 
 ---
 
-## 1. Backend Test Breakdown (`python -m pytest tests -v`)
+## 1. Backend Test Breakdown (`python -m pytest tests -v`) — 329 Tests
 
 ### Agent Tests (`tests/agent/`) - 15 Tests
 - `tests/agent/test_agent_field_hardening.py`:
@@ -35,26 +36,51 @@ Merged HEAD: `main` (Integrated with Predictive Fault AI Benchmark Evaluation)
 - `tests/engine/test_replay.py`: CSV real telemetry data replay adapter (8 tests)
 - `tests/test_benchmark_smoke.py`: Benchmark runner, comparative evaluation vs EWMA and static thresholds (8 tests)
 
-### API Tests (`tests/api/`) - 104 Tests
+### API Tests (`tests/api/`) - 113 Tests
 - `test_agents.py`: Agent registration, heartbeat, and offline TTL tracking (5 tests)
 - `test_auth.py`: Token generation, validation, and rejection (6 tests)
 - `test_explanations.py`: Sarvam LLM, Bulbul TTS audio, fallback simulation (8 tests)
+- `test_graph_incident_api.py`: Graph incident intelligence (9 tests PASS)
+  - `test_get_incident_graph_404_not_found`: 404 on missing incidents
+  - `test_get_incident_graph_simulated_incident`: Simulated incidents use in-memory store
+  - `test_get_incident_graph_no_phone_numbers_leaked`: Zero phone numbers in API response
+  - `test_get_incident_graph_essential_services_sorted_first`: Priority restore sorting
+  - `test_get_incident_graph_handles_failed_node`: Support for failed nodes as well as links
+  - `test_get_incident_graph_live_source_fallback_when_neo4j_down`: Safe memory fallback with fallback: true
+  - `test_notify_reconciliation_logs_warning_and_filters_unreconciled`: Forward SQLite reconciliation
+  - `test_incident_history_counts_only_live_incidents`: Chronic fault query filters data_source = 'live'
+  - `test_notify_reconciliation_reverse_direction_includes_extra_sqlite_subscriber`: Two-way reconciliation
 - `test_incidents.py`: Incident creation, state transitions, resolution (12 tests)
 - `test_measurements_ingest.py`: High-throughput metric ingestion & validation (14 tests)
+- `test_notifications.py`: Outage alert dispatch and preview (10 tests)
 - `test_probes_api.py`: Probing paths, cycle detection, synthetic hop simulation (10 tests)
 - `test_security.py`: Rate limiting, XSS prevention, CORS policy, header hardening (8 tests)
 - `test_subscribers.py`: Subscriber CRUD, payment status, QR payload (9 tests)
 - `test_telemetry_ws_live.py`: WebSocket broadcast, live streaming, reconnection (12 tests)
 - `test_topology.py` & `test_topology_v2.py`: GIS endpoints, geo-coordinates, predictive risk endpoints, SLA metrics (20 tests)
 
-### Engine & Analytics Tests (`tests/engine/`) - 152 Tests
+### Engine & Analytics Tests (`tests/engine/`) - 161 Tests
+- `test_graph_backend_n1.py`: Safe Neo4j activation & fallback (8 tests PASS)
+  - `test_graph_backend_memory_always_in_memory`: GRAPH_BACKEND=memory isolation
+  - `test_negative_cache_availability_probe`: 30s backoff negative cache
+  - `test_topology_cache_locked_and_invalidated_on_seed`: Thread-safe cached snapshot
+  - `test_mid_run_neo4j_failure_falls_back_without_500`: Mid-run crash resilience
+  - `test_sanitize_last_error_removes_uri_user_password`: Generic error summaries
+  - `test_get_graph_status_endpoint_offline`: Status endpoint reporting
+  - `test_get_graph_status_endpoint_unconfigured`: Clean unconfigured state
+  - `test_get_graph_status_endpoint_memory_mode`: Forced memory backend status
+- `test_graph_n2_parity.py`: Neo4j vs In-Memory Parity & Incident Writeback (3 tests, skipped without live Aura)
+  - `test_link_failure_parity`: Link failure blast-radius parity
+  - `test_node_failure_parity`: Node failure blast-radius parity
+  - `test_record_incident_node_and_affected_relationships_live`: Incident write & readback
+- `test_neo4j_client.py`: Neo4j driver & query sanitization (8 tests)
+- `test_neo4j_integration.py`: Live Neo4j topology integration (2 tests, skipped without live Aura)
 - `test_baselines_learned.py`: EWMA baselines persistence in SQLite across server restarts (7 tests)
 - `test_cause.py`: Root Cause Analysis, graph traversal, and fault isolation (16 tests)
 - `test_diagnostics.py`: Anomaly z-scoring, network jitter, loss attribution (24 tests)
 - `test_incident_persistence.py`: DB schema persistence, event log journaling (11 tests)
 - `test_incident_sla.py`: Village SLA uptime %, outage duration, penalty calculations (5 tests)
 - `test_live_ttl.py`: Stale telemetry decay and connectivity timeouts (8 tests)
-- `test_neo4j_client.py` & `test_neo4j_store.py`: Graph DB queries and in-memory dual fallback (14 tests)
 - `test_predictive.py`: Linear regression failure prediction, risk ETA derivation (18 tests)
 - `test_probes_derivation.py`: Active probing path selection, hop matrix (12 tests)
 - Remaining engine and mathematical model tests: (37 tests)
@@ -83,6 +109,7 @@ Merged HEAD: `main` (Integrated with Predictive Fault AI Benchmark Evaluation)
 - `getLinkDashArray` & `getLinkStrokeWidth`: Visual styling and dashed stroke rules.
 - `villageStatusColor`: Backend status mapping for Rampur, Bhatpur, and Daulatpur.
 - `freshnessStyle`, `formatLastSeen`, `isHealthyForKpi`: Real-time data freshness monitoring.
+- `buildFailurePath`: Graph tree traversal and degraded hop isolation.
 
 ---
 

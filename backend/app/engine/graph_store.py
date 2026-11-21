@@ -341,11 +341,12 @@ class Neo4jGraphStore:
         component_id: str,
         days: int = 30,
     ) -> Tuple[int, Dict[str, Any]]:
-        """Queries count of incidents on the component in the last 30 days from Neo4j."""
+        """Queries count of incidents on the component in the last 30 days from Neo4j (live incidents only)."""
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         cypher = """
         MATCH (i:Incident)
         WHERE (i.link_id = $component_id OR i.component_id = $component_id)
+          AND (i.data_source = 'live' OR i.data_source IS NULL)
           AND i.started_at >= $cutoff
         RETURN count(i) AS incidents_30d
         """
@@ -379,7 +380,7 @@ class Neo4jGraphStore:
     ) -> bool:
         """Idempotently records an Incident node and relationships in Neo4j (best effort, non-blocking).
 
-        Writes once per incident (MERGE on id).
+        Writes once per incident (MERGE on id) and tags data_source = 'live'.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
         start = started_at or now_iso
@@ -390,6 +391,7 @@ class Neo4jGraphStore:
         SET i.link_id = $link_id,
             i.component_id = $component_id,
             i.cause = $cause,
+            i.data_source = 'live',
             i.started_at = $started_at,
             i.resolved_at = $resolved_at
         WITH i
